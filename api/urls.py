@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView
+from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -11,5 +11,17 @@ urlpatterns=[
     path('categorias/<int:id>', CategoriasView.as_view(), name='categorias_process'),
 
     path('subcategorias/', SubCategoriasView.as_view(), name='subcategorias_list'),
-    path('subcategorias/<int:id>', SubCategoriasView.as_view(), name='subcategorias_process')
+    path('subcategorias/<int:id>', SubCategoriasView.as_view(), name='subcategorias_process'),
+
+    path('transacciones/', TransaccionesView.as_view(), name='transacciones_list'),
+    path('transacciones/<int:id>', TransaccionesView.as_view(), name='transacciones_process'),
+
+    path('transferencias/', TransferenciasView.as_view(), name='transferencias_list'),
+    path('transferencias/<int:id>', TransferenciasView.as_view(), name='transferencias_process'),
+
+    path('objetivos/', ObjetivosView.as_view(), name='objetivos_list'),
+    path('objetivos/<int:id>', ObjetivosView.as_view(), name='objetivos_process'),
+
+    path('limites/', LimitesView.as_view(), name='limites_list'),
+    path('limites/<int:id>', LimitesView.as_view(), name='limites_process')
 ]
