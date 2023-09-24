@@ -1,3 +1,5 @@
+import json
+import datetime #para el manejo de fechas
 from typing import Any
 from django import http
 from django.http.response import JsonResponse 
@@ -6,9 +8,11 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from .models import usuario, cuenta, categoria, subcategoria, transaccion, transferencia, objetivo, limite
 from django.utils.decorators import method_decorator
-import json
+from datetime import datetime, date
+from django.contrib.auth.decorators import login_required
 
 
+#Clases para aplicar los metodos get,post,put y delete a cada uno de los 8 modelos de la BD
 class UsuarioView(View):
 
     @method_decorator(csrf_exempt)
@@ -17,7 +21,7 @@ class UsuarioView(View):
 
 
     
-
+    @login_required
     def get(self,request, id=0):
         if (id>0):
             usuarios=list(usuario.objects.filter(id=id).values())
@@ -75,7 +79,7 @@ class CuentasView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    
     def get(self,request, id=0):
         if (id>0):
             cuentas=list(cuenta.objects.filter(id=id).values())
@@ -238,6 +242,8 @@ class SubCategoriasView(View):
 
 class TransaccionesView(View):
 
+    
+
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -245,10 +251,12 @@ class TransaccionesView(View):
     
 
     def get(self,request, id=0):
+        
         if (id>0):
             transacciones=list(transaccion.objects.filter(id=id).values())
             if len(transacciones)>0:
                 aux=transacciones[0]
+                
                 datos={'message': "Exito", "transaccion": aux}
             else:
                 datos={'message': "transaccion no encontrada"}
@@ -264,13 +272,13 @@ class TransaccionesView(View):
 
     def post (self,request):
         jd=json.loads(request.body)
-        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         transaccion.objects.create(clave_cuenta_id=jd["clave_cuenta"],
                                    clave_categoria_id=jd["clave_categoria"],
                                    clave_subcategoria_id=jd["clave_subcategoria"],
                                    cantidad=jd["cantidad"],
                                    divisa=jd["divisa"],
-                                   fecha=jd["fecha"],
+                                   fecha=parsed_date,
                                    comentarios=jd["comentarios"])
 
         datos={'message': "Exito"}
@@ -316,12 +324,19 @@ class TransferenciasView(View):
 
     def post (self,request):
         jd=json.loads(request.body)
-        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         transferencia.objects.create(clave_cuenta_id=jd["clave_cuenta"],
-                                   tipo=jd["tipo"],
+                                   tipo="cargo",
                                    cantidad=jd["cantidad"],
                                    divisa=jd["divisa"],
-                                   fecha=jd["fecha"],
+                                   fecha=parsed_date,
+                                   comentarios=jd["comentarios"])
+        
+        transferencia.objects.create(clave_cuenta_id=jd["clave_cuenta_2"],
+                                   tipo="abono",
+                                   cantidad=jd["cantidad"],
+                                   divisa=jd["divisa"],
+                                   fecha=parsed_date,
                                    comentarios=jd["comentarios"])
 
         datos={'message': "Exito"}
@@ -338,9 +353,6 @@ class TransferenciasView(View):
         else:
             datos={'message': "Transferencia no encontrado"}
         return JsonResponse(datos)
-
-
-
 
 class ObjetivosView(View):
 
@@ -393,7 +405,6 @@ class ObjetivosView(View):
             datos={'message': "Objetivo no encontrado"}
         return JsonResponse(datos)
 
-
 class LimitesView(View):
 
     @method_decorator(csrf_exempt)
@@ -445,4 +456,95 @@ class LimitesView(View):
             datos={'message': "limite no encontrado"}
         return JsonResponse(datos)
 
+#Clase que contiene el metodo get para obtener las transacciones realizadas entre dos fechas y un usuario especifico
+class TransaccionesRango(View):
 
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, fecha="",fecha2="", id=0):
+        
+
+        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).values())#__range sirve para obtener registros entre 2 rangos de fechas
+        if len(transacciones)>0:
+            
+            datos={'message': "Exito", "transaccion": transacciones}
+        else:
+            datos={'message': "transaccion no encontrada"}
+        return JsonResponse(datos)
+
+#Clase que contiene el metodo get para obtener las transacciones realizadas un dia especifico
+class TransaccionesDia(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, id=0):
+        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).values())
+        if len(transacciones)>0:
+            
+            datos={'message': "Exito", "transaccion": transacciones}
+            return JsonResponse(datos)
+        else:
+            datos={'message': "transaccion no encontrada"}
+            return JsonResponse(datos)
+        
+#Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
+class TransaccionesMes(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, id=0):
+        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        aux= parsed_date.split("-")
+        
+        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+        if len(transacciones)>0:
+            lista_filtrada=[]
+
+            for elemento in transacciones:
+                fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                if fecha[1]==aux[1] and fecha[0]==aux[0]:
+                    lista_filtrada.append(elemento)
+
+            datos={'message': "Exito", "transaccion": lista_filtrada}
+            return JsonResponse(datos)
+        else:
+            datos={'message': "transaccion no encontrada"}
+            return JsonResponse(datos)
+
+
+#Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
+class TransaccionesYear(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, id=0):
+        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        aux= parsed_date.split("-")
+        
+        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+        if len(transacciones)>0:
+            lista_filtrada=[]
+
+            for elemento in transacciones:
+                fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                if fecha[0]==aux[0]:
+                    lista_filtrada.append(elemento)
+
+            datos={'message': "Exito", "transaccion": lista_filtrada}
+            return JsonResponse(datos)
+        else:
+            datos={'message': "transaccion no encontrada"}
+            return JsonResponse(datos)

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView
+from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -23,5 +23,10 @@ urlpatterns=[
     path('objetivos/<int:id>', ObjetivosView.as_view(), name='objetivos_process'),
 
     path('limites/', LimitesView.as_view(), name='limites_list'),
-    path('limites/<int:id>', LimitesView.as_view(), name='limites_process')
+    path('limites/<int:id>', LimitesView.as_view(), name='limites_process'),
+
+    path('transacciones/rango/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
+    path('transacciones/dia/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
+    path('transacciones/mes/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
+    path('transacciones/year/<int:id>', TransaccionesYear.as_view(), name='transacciones_year')
 ]
