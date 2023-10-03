@@ -10,7 +10,8 @@ from .models import usuario, cuenta, categoria, subcategoria, transaccion, trans
 from django.utils.decorators import method_decorator
 from datetime import datetime, date
 from django.contrib.auth.decorators import login_required
-
+from django.conf import settings
+from django.core.mail import send_mail, EmailMultiAlternatives
 
 #Clases para aplicar los metodos get,post,put y delete a cada uno de los 8 modelos de la BD
 class UsuarioView(View):
@@ -19,9 +20,8 @@ class UsuarioView(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-
     
-    @login_required
+
     def get(self,request, id=0):
         if (id>0):
             usuarios=list(usuario.objects.filter(id=id).values())
@@ -157,7 +157,11 @@ class CategoriasView(View):
     def post (self,request):
         jd=json.loads(request.body)
         
-        categoria.objects.create(clave_usuario_id=jd["clave_usuario"],total_transacciones=jd["total_transacciones"], total_dinero=jd["total_dinero"], tipo=jd["tipo"], nombre=jd["nombre"])
+        categoria.objects.create(clave_usuario_id=jd["clave_usuario"],
+                                 total_transacciones=0, 
+                                 total_dinero=0, 
+                                 tipo=jd["tipo"], 
+                                 nombre=jd["nombre"])
 
         datos={'message': "Exito"}
         return JsonResponse(datos)
@@ -276,6 +280,7 @@ class TransaccionesView(View):
         transaccion.objects.create(clave_cuenta_id=jd["clave_cuenta"],
                                    clave_categoria_id=jd["clave_categoria"],
                                    clave_subcategoria_id=jd["clave_subcategoria"],
+                                   tipo=jd["tipo"],
                                    cantidad=jd["cantidad"],
                                    divisa=jd["divisa"],
                                    fecha=parsed_date,
@@ -463,12 +468,19 @@ class TransaccionesRango(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    
-
-    def get(self,request, fecha="",fecha2="", id=0):
+    def get(self,request,categoria=0, tipo="", fecha="",fecha2="", id=0):
         
+        if ((tipo=="Ingreso" or tipo=="Gasto") and categoria!=0):
+            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=int(categoria)).values())
 
-        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).values())#__range sirve para obtener registros entre 2 rangos de fechas
+        elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
+        
+        elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(tipo=tipo).values())
+        else:
+            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).values())#__range sirve para obtener registros entre 2 rangos de fechas
+        
         if len(transacciones)>0:
             
             datos={'message': "Exito", "transaccion": transacciones}
@@ -484,10 +496,17 @@ class TransaccionesDia(View):
 
     
 
-    def get(self,request, id=0):
+    def get(self,request, tipo="", id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).values())
+
+        if (tipo=="Ingreso" or tipo=="Gasto"):
+            transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).filter(tipo=tipo).values())
+        else:
+            transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).values())
+
+
+        
         if len(transacciones)>0:
             
             datos={'message': "Exito", "transaccion": transacciones}
@@ -502,12 +521,16 @@ class TransaccionesMes(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request, id=0):
+    def get(self,request,tipo="", id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
         
-        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+        if (tipo=="Ingreso" or tipo=="Gasto"):
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+        else:
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+
         if len(transacciones)>0:
             lista_filtrada=[]
 
@@ -529,12 +552,18 @@ class TransaccionesYear(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request, id=0):
+    def get(self,request,tipo="", id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
         
-        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+
+        if (tipo=="Ingreso" or tipo=="Gasto"):
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+        else:
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+        
+        
         if len(transacciones)>0:
             lista_filtrada=[]
 
@@ -548,3 +577,1031 @@ class TransaccionesYear(View):
         else:
             datos={'message': "transaccion no encontrada"}
             return JsonResponse(datos)
+
+#Clase que contiene el metodo get para obtener las transacciones realizadas la semnaa actual
+class TransaccionesSemana(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request,tipo="", id=0):
+        aux2=date.today()
+
+        #print(aux2.weekday())
+
+        fecha_inicial=["0000","00","00"]
+        fecha_final=["0000","00","00"]
+
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d") # Se obtiene la fecha actual en formato YYYY-MM-DD
+
+        aux= parsed_date.split("-") # auxiliar que contendra la fecha divida en a;o, mes y dia
+
+        if (aux2.weekday()==0): # Es lunes
+            if (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12"): # se validan meses con 31 dias
+                if ((int(aux[2]) + 6) > 31): # se da un brinco de mes entre el inicio y el fin de semana
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 31)
+                    if (aux[1]=="12"): #Es diciembre y se tiene que guardar los datos de la fecha final del rango de la semana
+                        fecha_final[0] = str(int(aux[0])+1) #Se suma 1 al a;o
+                        fecha_final[1] = "01"   # El mes es enero
+                        fecha_final[2] = dias_restantes
+
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    else:
+                        fecha_final[0] = aux[0]
+                        
+                        if (int(aux[1]) + 1>9): # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                            fecha_final[1] =str (int(aux[1]) + 1)
+                        else:
+                            fecha_final[1] ="0" + str(int(aux[1]) + 1)
+                        fecha_final[2] = dias_restantes
+                        
+                        
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+
+            elif (aux[1]=="02"):
+                if ((int(aux[2]) + 6) > 28):
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 28)
+                    
+                    fecha_final[0] = aux[0]
+                    
+                    fecha_final[1] = "03"
+                    
+                    fecha_final[2] = dias_restantes
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # se validan meses con 30 dias
+                if ((int(aux[2]) + 6) > 30):
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 30)
+                    if (aux[1]=="12"): #Es diciembre y se tiene que guardar los datos de la fecha final del rango de la semana
+                        fecha_final[0] = str(int(aux[0])+1) #Se suma 1 al a;o
+                        fecha_final[1] = "01"   # El mes es enero
+                        fecha_final[2] = dias_restantes
+
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    else:
+                        fecha_final[0] = aux[0]
+                        
+                        if (int(aux[1]) + 1>9): # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                            fecha_final[1] =str (int(aux[1]) + 1)
+                        else:
+                            fecha_final[1] ="0" + str(int(aux[1]) + 1)
+                        fecha_final[2] = dias_restantes
+                        
+                        
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==1): # Es martes
+            if (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+5)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-1)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-1)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-1)
+
+                if((int(aux[2])+5)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+5)
+                else:
+                    fecha_final[2]=str(int(aux[2])+5)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==2): # Es miercoles
+            if (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+4)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+4)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-2)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-2)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-2)
+
+                if((int(aux[2])+4)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+4)
+                else:
+                    fecha_final[2]=str(int(aux[2])+4)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==3): # Es jueves
+            if (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-3)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-3)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-3)
+
+                if((int(aux[2])+3)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+3)
+                else:
+                    fecha_final[2]=str(int(aux[2])+3)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==4): # Es viernes
+            if (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "28"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "28"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "25"
+                    else:
+                        fecha_inicial[2] = "27"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-4)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-4)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-4)
+
+                if((int(aux[2])+2)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+2)
+                else:
+                    fecha_final[2]=str(int(aux[2])+2)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==5): # Es sabado
+            if (aux[2]=="05"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="03"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "28"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "28"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "25"
+                    else:
+                        fecha_inicial[2] = "27"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "27"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "27"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "24"
+                    else:
+                        fecha_inicial[2] = "26"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-5)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-5)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-5)
+
+                if((int(aux[2])+1)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+1)
+                else:
+                    fecha_final[2]=str(int(aux[2])+1)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==6): # es domingo
+
+            if ((int(aux[2]) - 6) < 1): # se da un brinco de mes entre el inicio y el fin de semana
+                dias_restantes=(6 - int(aux[2]))
+                if (aux[1]=="01"):
+                    mes_anterior="12"
+                    fecha_inicial[0]=str(int(aux[0])-1)
+                else:
+                    if((int(aux[1])-1)<10):    # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        mes_anterior="0" + str(int(aux[1])-1)
+                    else:
+                        mes_anterior=str(int(aux[1])-1)
+                    fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=mes_anterior
+                if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10" or mes_anterior=="12"):
+                    fecha_inicial[2]=str(31-dias_restantes)
+                elif (mes_anterior=="02"):
+                    fecha_inicial[2]=str(28-dias_restantes)
+                else:
+                    fecha_inicial[2]=str(30-dias_restantes)
+                fecha_final[0] = aux[0]
+                fecha_final[1] = aux[1]
+                fecha_final[2] = aux[2]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+                
+            else: # solo se resta para llegar al rango de fechas
+                fecha_inicial[0] = aux[0]
+                fecha_inicial[1] = aux[1]
+                if ((int(aux[2]) - 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                    fecha_inicial[2] =str (int(aux[2]) - 6)
+                else:
+                    fecha_inicial[2] ="0" + str(int(aux[2]) - 6)
+
+
+                fecha_final[0] = aux[0]
+                fecha_final[1] = aux[1]
+                fecha_final[2] = aux[2]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            
+
+        inicio=fecha_inicial[0]+"-" + fecha_inicial[1]+"-"+fecha_inicial[2]
+        final=fecha_final[0]+"-" + fecha_final[1]+"-"+fecha_final[2]
+
+
+        if (tipo=="Ingreso" or tipo=="Gasto"):
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
+        else:
+            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(fecha__range=(inicio, final)).values())
+        
+        
+        
+        if len(transacciones)>0:
+
+            datos={'message': "Exito","Inicio": inicio, "Final": final, "transaccion": transacciones}
+            return JsonResponse(datos)
+        else:
+            datos={'message': "transacciones no encontradas"}
+            return JsonResponse(datos)
+        
+
+
+class CorreoRecuperacion(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def post(self,request):
+        jd=json.loads(request.body)
+        correos=list(usuario.objects.filter(correo=jd["txt_email"]).values())
+        if len(correos)>0:
+            for correo in correos:
+
+                asunto = "Mensaje de Django"
+                mensaje = "Esto es un mensaje de prueba para el envio de correos:\nTu contraseña es: " + correo['contra']
+                email_desde = settings.EMAIL_HOST_USER
+                email_para = jd["txt_email"]
+                msg=EmailMultiAlternatives(asunto, mensaje, email_desde, [email_para])
+                msg.send()
+
+
+                datos={'message': "correo enviado"}
+                return JsonResponse(datos)
+        else:
+            datos={'message': "correo no encontrado"}
+            return JsonResponse(datos)
+        
+

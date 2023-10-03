@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear
+from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -25,8 +25,11 @@ urlpatterns=[
     path('limites/', LimitesView.as_view(), name='limites_list'),
     path('limites/<int:id>', LimitesView.as_view(), name='limites_process'),
 
-    path('transacciones/rango/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
-    path('transacciones/dia/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
-    path('transacciones/mes/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
-    path('transacciones/year/<int:id>', TransaccionesYear.as_view(), name='transacciones_year')
+    path('transacciones/rango/<str:tipo>/<int:categoria>/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
+    path('transacciones/dia/<str:tipo>/<int:categoria>/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
+    path('transacciones/mes/<str:tipo>/<int:categoria>/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
+    path('transacciones/year/<str:tipo>/<int:categoria>/<int:id>', TransaccionesYear.as_view(), name='transacciones_year'),
+    path('transacciones/semana/<str:tipo>/<int:categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
+
+    path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion")
 ]

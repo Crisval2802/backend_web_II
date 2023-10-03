@@ -37,6 +37,7 @@ class transaccion(models.Model):
     clave_categoria = models.ForeignKey(categoria, null=False, blank=False, on_delete=models.DO_NOTHING)
     clave_subcategoria = models.ForeignKey(subcategoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     cantidad=models.FloatField()
+    tipo=models.CharField(max_length=10, default="Gasto", null=False)
     divisa=models.CharField(max_length=3)
     fecha=models.DateField()
     comentarios=models.CharField(max_length=500)
