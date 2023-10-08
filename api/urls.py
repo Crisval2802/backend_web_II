@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion
+from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -21,9 +21,11 @@ urlpatterns=[
 
     path('objetivos/', ObjetivosView.as_view(), name='objetivos_list'),
     path('objetivos/<int:id>', ObjetivosView.as_view(), name='objetivos_process'),
+    path('objetivos/usuario/<int:id_usuario>', ObjetivosUsuario.as_view(), name='objetivos_usuario'),
 
     path('limites/', LimitesView.as_view(), name='limites_list'),
     path('limites/<int:id>', LimitesView.as_view(), name='limites_process'),
+    path('limites/usuario/<int:id_usuario>', LimitesUsuario.as_view(), name='limites_usuario'),
 
     path('transacciones/rango/<str:tipo>/<int:categoria>/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
     path('transacciones/dia/<str:tipo>/<int:categoria>/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
@@ -31,5 +33,11 @@ urlpatterns=[
     path('transacciones/year/<str:tipo>/<int:categoria>/<int:id>', TransaccionesYear.as_view(), name='transacciones_year'),
     path('transacciones/semana/<str:tipo>/<int:categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
 
-    path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion")
+    path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion"),
+    path('obtenerdivisa/<str:de_divisa>/<str:a_divisa>', ObtenerDivisa.as_view(), name="ObtenerDivisa"),
+
+
+    path('reporte', FormatoReporte.as_view(), name="FormatoReporte")
+
+
 ]

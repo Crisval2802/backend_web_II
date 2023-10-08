@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang=""es>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte de transacciones</title>
+    
+</head>
+
+    <p style="text-align: center; font-size: 32px; width: 100%; background-color: #020246; color:white; padding:10px"><strong>Administrador de ingresos y gastos</strong></p>
+    <h1 style="text-align: center; font-size: 28px"> <strong>Reporte de transacciones</strong> </h1>
+    <h1 style="font-size: 14px;"> <strong>{{datos.usuario}}</strong>  </h1>
+    <h2 style ="text-align: right;"> Fecha del reporte: {{datos.fecha}}</h2>
+    <hr />
+    <p>&nbsp;</p>
+    <table style="  width: 100%;
+                    border-collapse: collapse; padding: 5px"
+                    border="1">
+        <tbody style="text-align: center;">
+            <tr style="background-color: #155A71; color: white; font-size: 13px;">
+                <td style="width: 12.5%;"> <strong>  Cuenta  </strong></td>
+                <td style="width: 12.5%;"><strong>Categoria</strong></td>
+                <td style="width: 12.5%;"><strong>Sub-categoria</strong></td>
+                <td style="width: 8.17233%;"><strong>Tipo</strong></td>
+                <td style="width: 16.8277%;"><strong>Cantidad</strong></td>
+                <td style="width: 9.40881%;"><strong>Divisa</strong></td>
+                <td style="width: 19.6469%;"><strong>Comentarios</strong></td>
+                <td style="width: 8.34112%;"><strong>Fecha</strong></td>
+            </tr>
+
+            {% for item in datos.transacciones %}
+
+
+            <tr  style="background-color: #CCEAF4;">
+                <td style="width: 12.5%;">{{item.clave_cuenta_id}}</td>
+                <td style="width: 12.5%;">{{item.clave_categoria_id}}</td>
+                <td style="width: 12.5%;">{{item.clave_subcategoria_id}}</td>
+                <td style="width: 8.17233%;">{{item.tipo}}</td>
+                <td style="width: 16.8277%;">{{item.cantidad}}</td>
+                <td style="width: 9.40881%;">{{item.divisa}}</td>
+                <td style="width: 19.6469%;">{{item.comentarios}}</td>
+                <td style="width: 8.34112%;">{{item.fecha}}</td>
+            </tr>
+
+            {% endfor %}
+        </tbody>
+    </table>

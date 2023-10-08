@@ -1,5 +1,13 @@
 import json
 import datetime #para el manejo de fechas
+import requests
+
+
+from django.http import HttpResponse
+from django.template.loader import get_template
+from xhtml2pdf import pisa
+
+
 from typing import Any
 from django import http
 from django.http.response import JsonResponse 
@@ -20,7 +28,7 @@ class UsuarioView(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    
+
 
     def get(self,request, id=0):
         if (id>0):
@@ -49,16 +57,62 @@ class UsuarioView(View):
         return JsonResponse(datos)
 
     def put (self,request, id=0):
+        valor_divisa=""
         jd =json.loads(request.body)
         usuarios=list(usuario.objects.filter(id=id).values())
         if len(usuarios)>0:
             aux=usuario.objects.get(id=id)
 
-            aux.nombre=jd["nombre"]
-            aux.contra=jd["contra"]
-            aux.divisa=jd["divisa"]
+            if(jd["nombre"] !=""):
+                aux.nombre=jd["nombre"]
+            
+            if(jd["contra"] !=""):
+                aux.contra=jd["contra"]
+            
+            if(jd["divisa"] !=""):
+                de_divisa=aux.divisa
+                a_divisa=jd["divisa"]
+                aux.divisa=jd["divisa"]
+
+                url_api = "https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/" + de_divisa + "/" + a_divisa + ".json"
+                response = requests.get(url_api)
+                if response.status_code ==200:
+                    aux2 = response.json()
+                    valor_divisa=aux2[a_divisa]
+
+
+                    # se actualiza el balance actual del usuario
+                    balance= float(aux.balance)
+                    balance = balance * float(valor_divisa)
+
+                    aux.balance=round(balance,2)
+
+                    #se actualiza el balance de las cuentas del usuario
+                    cuentas=list(cuenta.objects.filter(clave_usuario=aux.id).values())
+
+                    if len(cuentas)>0:
+
+                        for elemento in cuentas:
+                            id_cuenta = elemento['id']
+                            aux_cuenta=cuenta.objects.get(id=id_cuenta)
+                            
+                            balance= float(aux_cuenta.balance)
+                            balance = balance * float(valor_divisa)
+
+                            aux_cuenta.balance=round(balance,2)
+                            aux_cuenta.divisa=jd["divisa"]
+
+                            aux_cuenta.save()
+             
+                        
+                                      
+
+            
+            
+            
+            
             aux.save()
-            datos={'message': "Exito"}
+            datos={'message': "Exito", "Valor": valor_divisa}
         else:
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
@@ -71,6 +125,8 @@ class UsuarioView(View):
         else:
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
+    
+   
 
 class CuentasView(View):
 
@@ -468,25 +524,47 @@ class TransaccionesRango(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,categoria=0, tipo="", fecha="",fecha2="", id=0):
-        
-        if ((tipo=="Ingreso" or tipo=="Gasto") and categoria!=0):
-            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=int(categoria)).values())
-
-        elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
-        
-        elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
-            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).filter(tipo=tipo).values())
-        else:
-            transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=id).values())#__range sirve para obtener registros entre 2 rangos de fechas
-        
-        if len(transacciones)>0:
+    def get(self,request, tipo="",categoria=0, fecha="",fecha2="", id=0):
+        if (id>0):
             
-            datos={'message': "Exito", "transaccion": transacciones}
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(categoria)).values())
+
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).values())
+                    
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).values())#__range sirve para obtener registros entre 2 rangos de fechas
+                    
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    datos={'message': "Exito", "Transacciones": lista_transacciones}
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
         else:
-            datos={'message': "transaccion no encontrada"}
-        return JsonResponse(datos)
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas un dia especifico
 class TransaccionesDia(View):    
@@ -496,24 +574,49 @@ class TransaccionesDia(View):
 
     
 
-    def get(self,request, tipo="", id=0):
+    def get(self,request, tipo="",categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
 
-        if (tipo=="Ingreso" or tipo=="Gasto"):
-            transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).filter(tipo=tipo).values())
-        else:
-            transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=id).values())
-
-
-        
-        if len(transacciones)>0:
+        if (id>0):
             
-            datos={'message': "Exito", "transaccion": transacciones}
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).values())
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    datos={'message': "Exito", "Transacciones": lista_transacciones}
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
             return JsonResponse(datos)
+
+
+            
         else:
-            datos={'message': "transaccion no encontrada"}
+            datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
+                    
+
         
 #Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
 class TransaccionesMes(View):    
@@ -521,29 +624,66 @@ class TransaccionesMes(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="", id=0):
+    def get(self,request,tipo="",categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
-        
-        if (tipo=="Ingreso" or tipo=="Gasto"):
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
-        else:
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+        if (id>0):
+            
 
-        if len(transacciones)>0:
-            lista_filtrada=[]
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
 
-            for elemento in transacciones:
-                fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
-                if fecha[1]==aux[1] and fecha[0]==aux[0]:
-                    lista_filtrada.append(elemento)
 
-            datos={'message': "Exito", "transaccion": lista_filtrada}
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_filtrada=[]
+
+                    for elemento in lista_transacciones:
+                        fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                        if fecha[1]==aux[1] and fecha[0]==aux[0]:
+                            lista_filtrada.append(elemento)
+
+                    if len(lista_filtrada)>0:
+                        datos={'message': "Exito", "Transaccion": lista_filtrada}
+                        return JsonResponse(datos)
+                    else:
+                        datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                        return JsonResponse(datos)
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                    return JsonResponse(datos)
+                    
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
             return JsonResponse(datos)
+
+
+            
         else:
-            datos={'message': "transaccion no encontrada"}
+            datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
+                    
+
+
+
+
+                        
 
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
@@ -552,31 +692,63 @@ class TransaccionesYear(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="", id=0):
+    def get(self,request,tipo="",categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
-        
+            
+        if (id>0):
+            
 
-        if (tipo=="Ingreso" or tipo=="Gasto"):
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
-        else:
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
-        
-        
-        if len(transacciones)>0:
-            lista_filtrada=[]
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
 
-            for elemento in transacciones:
-                fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
-                if fecha[0]==aux[0]:
-                    lista_filtrada.append(elemento)
 
-            datos={'message': "Exito", "transaccion": lista_filtrada}
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_filtrada=[]
+
+                    for elemento in lista_transacciones:
+                        fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                        if fecha[0]==aux[0]:
+                            lista_filtrada.append(elemento)
+
+
+                    if len(lista_filtrada)>0:
+                        datos={'message': "Exito", "Transaccion": lista_filtrada}
+                        return JsonResponse(datos)
+                    else:
+                        datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                        return JsonResponse(datos)
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                    return JsonResponse(datos)
+                    
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
             return JsonResponse(datos)
+  
         else:
-            datos={'message': "transaccion no encontrada"}
+            datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
+                    
+
+
+                
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas la semnaa actual
 class TransaccionesSemana(View):    
@@ -584,7 +756,7 @@ class TransaccionesSemana(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="", id=0):
+    def get(self,request,tipo="",categoria=0, id=0):
         aux2=date.today()
 
         #print(aux2.weekday())
@@ -1561,21 +1733,46 @@ class TransaccionesSemana(View):
         inicio=fecha_inicial[0]+"-" + fecha_inicial[1]+"-"+fecha_inicial[2]
         final=fecha_final[0]+"-" + fecha_final[1]+"-"+fecha_final[2]
 
+        if (id>0):
+            
 
-        if (tipo=="Ingreso" or tipo=="Gasto"):
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
-        else:
-            transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(fecha__range=(inicio, final)).values())
-        
-        
-        
-        if len(transacciones)>0:
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
 
-            datos={'message': "Exito","Inicio": inicio, "Final": final, "transaccion": transacciones}
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(fecha__range=(inicio, final)).values())
+                    
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    datos={'message': "Exito","Inicio": inicio, "Final": final, "Transacciones": lista_transacciones}
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
             return JsonResponse(datos)
+
+
+            
         else:
-            datos={'message': "transacciones no encontradas"}
+            datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
+        
+        
+        
         
 
 
@@ -1605,3 +1802,161 @@ class CorreoRecuperacion(View):
             return JsonResponse(datos)
         
 
+class LimitesUsuario(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+    def get(self,request, id_usuario=0):
+        if (id_usuario>0):
+            
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id_usuario).values())
+
+            if len(cuentas)>0:
+                lista_limites=[]   
+                for elemento in cuentas:
+                    limites=list(limite.objects.filter(clave_cuenta=elemento["id"]).values())
+
+                    if len(limites)>0:
+                        for elemento2 in limites:
+                            lista_limites.append(elemento2)
+
+                if len(lista_limites)>0:
+                    datos={'message': "Exito", "limites": lista_limites}
+                    
+                else:
+                    datos={'message': "No se encontraron limites asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+        else:
+                
+
+            datos={'message': "Ingrese un codigo de usuario para buscar"}
+            return JsonResponse(datos)
+        
+
+
+class ObjetivosUsuario(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+    def get(self,request, id_usuario=0):
+        if (id_usuario>0):
+            
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id_usuario).values())
+
+            if len(cuentas)>0:
+                lista_objetivos=[]   
+                for elemento in cuentas:
+                    objetivos=list(objetivo.objects.filter(clave_cuenta=elemento["id"]).values())
+
+                    if len(objetivos)>0:
+                        for elemento2 in objetivos:
+                            lista_objetivos.append(elemento2)
+
+                if len(lista_objetivos)>0:
+                    datos={'message': "Exito", "limites": lista_objetivos}
+                    
+                else:
+                    datos={'message': "No se encontraron objetivos asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+        else:
+                
+
+            datos={'message': "Ingrese un codigo de usuario para buscar"}
+            return JsonResponse(datos)
+        
+
+
+class ObtenerDivisa(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, de_divisa="", a_divisa=""):
+        url_api = "https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/" + de_divisa + "/" + a_divisa + ".json"
+        response = requests.get(url_api)
+        if response.status_code ==200:
+            aux = response.json()
+            #valor_divisa=[a_divisa]
+            datos = {'message':"Exito", "divisa": aux}
+        else:
+            
+            datos={'message': "Error al consumir la API"}
+
+        return JsonResponse(datos)
+    
+
+class FormatoReporte(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, id=""):
+
+        transacciones=list(transaccion.objects.values())
+
+
+
+
+        if len(transacciones)>0:
+            lista_final=[]
+            #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+            for elemento in transacciones:
+                #para obtener las cuentas
+                aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                for aux_cuenta in aux_cuentas:
+                    elemento['clave_cuenta_id']=aux_cuenta['nombre']
+                #para obtener las categorias
+                aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                for aux_categoria in aux_categorias:
+                    elemento['clave_categoria_id']=aux_categoria['nombre']
+                #para obtener las subcategorias
+                aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                if len(aux_subcategorias)>0:
+                    for aux_subcategoria in aux_subcategorias:
+                        elemento['clave_subcategoria_id']=aux_subcategoria['nombre']
+                else:
+                    elemento['clave_subcategoria_id']="**Ninguna**"
+
+                lista_final.append(elemento)
+
+            datos={"transacciones": lista_final,"fecha": date.today(), "usuario":"Cristian Armando Valenzuela Acosta"}
+        else:
+            datos={'message': "transacciones no encontradas"}
+
+
+        #Proceso para convertir el html a pdf
+        template = get_template('reporte.html')
+        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+        
+        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+        # Convierte el HTML a PDF y escribe en la respuesta
+        pisa_status = pisa.CreatePDF(html, dest=response)
+        
+        # Si la conversión tuvo éxito, devuelve la respuesta
+        if pisa_status.err:
+            return HttpResponse('Error al generar el PDF')
+        
+        return response
+    
+        
+
+
+
+        
