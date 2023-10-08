@@ -1,11 +1,12 @@
 from django.urls import path
-from .views import ReporteMes, ReporteSemana, ReporteYear, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from .views import CuentasUsuario, ReporteMes, ReporteSemana, ReporteYear, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
 
     path('cuentas/', CuentasView.as_view(), name='cuentas_list'),
     path('cuentas/<int:id>', CuentasView.as_view(), name='cuentas_process'),
+    path('cuentas/usuario/<int:id>', CuentasUsuario.as_view(), name='cuentas_usuario_process'),
 
     path('categorias/', CategoriasView.as_view(), name='categorias_list'),
     path('categorias/<int:id>', CategoriasView.as_view(), name='categorias_process'),
@@ -18,14 +19,15 @@ urlpatterns=[
 
     path('transferencias/', TransferenciasView.as_view(), name='transferencias_list'),
     path('transferencias/<int:id>', TransferenciasView.as_view(), name='transferencias_process'),
+    path('transferencias/usuario/<int:id>', TransferenciasUsuario.as_view(), name='transferencias_usuario'),
 
     path('objetivos/', ObjetivosView.as_view(), name='objetivos_list'),
     path('objetivos/<int:id>', ObjetivosView.as_view(), name='objetivos_process'),
-    path('objetivos/usuario/<int:id_usuario>', ObjetivosUsuario.as_view(), name='objetivos_usuario'),
+    path('objetivos/usuario/<int:id>', ObjetivosUsuario.as_view(), name='objetivos_usuario'),
 
     path('limites/', LimitesView.as_view(), name='limites_list'),
     path('limites/<int:id>', LimitesView.as_view(), name='limites_process'),
-    path('limites/usuario/<int:id_usuario>', LimitesUsuario.as_view(), name='limites_usuario'),
+    path('limites/usuario/<int:id>', LimitesUsuario.as_view(), name='limites_usuario'),
 
     path('transacciones/rango/<str:tipo>/<int:clave_categoria>/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
     path('transacciones/dia/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),

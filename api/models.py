@@ -52,19 +52,17 @@ class transferencia(models.Model):
 
 
 class objetivo(models.Model):
-    clave_cuenta = models.ForeignKey(cuenta, null=False, blank=False, on_delete=models.DO_NOTHING)
+    clave_usuario = models.ForeignKey(usuario, null=False, blank=False, on_delete=models.DO_NOTHING)
     total_ingresado=models.FloatField()
     objetivo_asignado=models.FloatField()
-    clave_categoria = models.ForeignKey(categoria, null=False, blank=False, on_delete=models.DO_NOTHING)
-    clave_subcategoria = models.ForeignKey(subcategoria, null=True, blank=False, on_delete=models.DO_NOTHING)
+    clave_categoria = models.ForeignKey(categoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     fecha_limite=models.DateField()
 
 class limite(models.Model):
-    clave_cuenta = models.ForeignKey(cuenta, null=False, blank=False, on_delete=models.DO_NOTHING)
+    clave_usuario = models.ForeignKey(usuario, null=False, blank=False, on_delete=models.DO_NOTHING)
     total_gastado=models.FloatField()
     limite_asignado=models.FloatField()
-    clave_categoria = models.ForeignKey(categoria, null=False, blank=False, on_delete=models.DO_NOTHING)
-    clave_subcategoria = models.ForeignKey(subcategoria, null=True, blank=False, on_delete=models.DO_NOTHING)
+    clave_categoria = models.ForeignKey(categoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     fecha_limite=models.DateField()
 
 

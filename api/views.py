@@ -343,6 +343,99 @@ class TransaccionesView(View):
                                    comentarios=jd["comentarios"])
 
         datos={'message': "Exito"}
+
+        #Cambio de balances
+        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta'])
+
+        clave_usuario=aux_cuenta.clave_usuario_id
+
+        aux_usuario=usuario.objects.get(id=int(clave_usuario))
+
+
+        balance=float(aux_cuenta.balance)
+        # se resta o suma del balance segun sea el caso
+        if (jd['tipo']=="Ingreso"):
+            balance= balance + float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance + float(jd['cantidad'])
+            aux_usuario.balance = balance
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
+                    aux_objetivo.save()
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
+                    aux_objetivo.save()
+
+
+
+        else:
+            balance= balance - float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance - float(jd['cantidad'])
+            aux_usuario.balance = balance
+
+
+
+            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
+                    aux_limite.save()
+            
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
+                    aux_limite.save()
+
+
+
+
+
+
+
+        aux_cuenta.save()
+        aux_usuario.save()
+
+        #se suma al contador de transacciones de las categorias
+        aux_categoria=categoria.objects.get(id=jd['clave_categoria'])
+        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
+        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
+        aux_categoria.save()
+
+        if (jd["clave_subcategoria"]!=""):
+            aux_subcategoria=subcategoria.objects.get(id=jd['clave_subcategoria'])
+            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
+            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
+            aux_subcategoria.save()
+
+
+        
+
+
         return JsonResponse(datos)
 
     def put (self,request, id=0):
@@ -399,6 +492,18 @@ class TransferenciasView(View):
                                    divisa=jd["divisa"],
                                    fecha=parsed_date,
                                    comentarios=jd["comentarios"])
+        
+
+
+        #Se resta de las cuentas y se suma segun toque:
+        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta'])
+        aux_cuenta.balance= aux_cuenta.balance - jd['cantidad']
+        aux_cuenta.save()
+
+        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta_2'])
+        aux_cuenta.balance= aux_cuenta.balance + jd['cantidad']
+        aux_cuenta.save()
+
 
         datos={'message': "Exito"}
         return JsonResponse(datos)
@@ -444,11 +549,10 @@ class ObjetivosView(View):
     def post (self,request):
         jd=json.loads(request.body)
         
-        objetivo.objects.create(clave_cuenta_id=jd["clave_cuenta"],
+        objetivo.objects.create(clave_usuario_id=jd["clave_usuario"],
                                 total_ingresado=jd["total_ingresado"],
                                 objetivo_asignado=jd["objetivo_asignado"],
                                 clave_categoria_id=jd["clave_categoria"],
-                                clave_subcategoria_id=jd["clave_subcategoria"],
                                 fecha_limite=jd["fecha_limite"])
 
         datos={'message': "Exito"}
@@ -495,11 +599,10 @@ class LimitesView(View):
     def post (self,request):
         jd=json.loads(request.body)
         
-        limite.objects.create(clave_cuenta_id=jd["clave_cuenta"],
+        limite.objects.create(clave_usuario_id=jd["clave_usuario"],
                                 total_gastado=jd["total_ingresado"],
                                 limite_asignado=jd["objetivo_asignado"],
                                 clave_categoria_id=jd["clave_categoria"],
-                                clave_subcategoria_id=jd["clave_subcategoria"],
                                 fecha_limite=jd["fecha_limite"])
 
         datos={'message': "Exito"}
@@ -1917,82 +2020,6 @@ class CorreoRecuperacion(View):
             return JsonResponse(datos)
         
 
-class LimitesUsuario(View):    
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-
-    
-    def get(self,request, id_usuario=0):
-        if (id_usuario>0):
-            
-
-            cuentas=list(cuenta.objects.filter(clave_usuario=id_usuario).values())
-
-            if len(cuentas)>0:
-                lista_limites=[]   
-                for elemento in cuentas:
-                    limites=list(limite.objects.filter(clave_cuenta=elemento["id"]).values())
-
-                    if len(limites)>0:
-                        for elemento2 in limites:
-                            lista_limites.append(elemento2)
-
-                if len(lista_limites)>0:
-                    datos={'message': "Exito", "limites": lista_limites}
-                    
-                else:
-                    datos={'message': "No se encontraron limites asociados a ese usuario"}
-            else:
-                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
-                    
-            return JsonResponse(datos)
-
-        else:
-                
-
-            datos={'message': "Ingrese un codigo de usuario para buscar"}
-            return JsonResponse(datos)
-        
-
-
-class ObjetivosUsuario(View):    
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-
-    
-    def get(self,request, id_usuario=0):
-        if (id_usuario>0):
-            
-
-            cuentas=list(cuenta.objects.filter(clave_usuario=id_usuario).values())
-
-            if len(cuentas)>0:
-                lista_objetivos=[]   
-                for elemento in cuentas:
-                    objetivos=list(objetivo.objects.filter(clave_cuenta=elemento["id"]).values())
-
-                    if len(objetivos)>0:
-                        for elemento2 in objetivos:
-                            lista_objetivos.append(elemento2)
-
-                if len(lista_objetivos)>0:
-                    datos={'message': "Exito", "limites": lista_objetivos}
-                    
-                else:
-                    datos={'message': "No se encontraron objetivos asociados a ese usuario"}
-            else:
-                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
-                    
-            return JsonResponse(datos)
-
-        else:
-                
-
-            datos={'message': "Ingrese un codigo de usuario para buscar"}
-            return JsonResponse(datos)
-        
 
 
 class ObtenerDivisa(View):    
@@ -3525,4 +3552,154 @@ class ReporteSemana(View):
         else:
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
+
+
+#Clases para obtener los limites y objtivos de determinado usuario
+class LimitesUsuario(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, id=0):
+        if (id>0):
+            limites=list(limite.objects.filter(clave_usuario=id).values())
+            if len(limites)>0:
+                lista_final=[]
+                #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                for elemento in limites:
+
+
+                    aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                    if len(aux_categorias)>0:
+                        for aux_subcategoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_subcategoria['nombre']
+                    else:
+                        elemento['nombre_categoria']="**Ninguna**"
+
+                    lista_final.append(elemento)
+
+
+
+                datos={'message': "Exito", "limites": lista_final}
+            else:
+                datos={'message': "limites no encontrados"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
+        
+#Clases para obtener los limites y objtivos de determinado usuario
+class ObjetivosUsuario(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, id=0):
+        if (id>0):
+            objetivos=list(objetivo.objects.filter(clave_usuario=id).values())
+            if len(objetivos)>0:
+                lista_final=[]
+                #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                for elemento in objetivos:
+
+
+                    aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                    if len(aux_categorias)>0:
+                        for aux_subcategoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_subcategoria['nombre']
+                    else:
+                        elemento['nombre_categoria']="**Ninguna**"
+
+                    lista_final.append(elemento)
+
+
+
+
+                datos={'message': "Exito", "limites": lista_final}
+            else:
+                datos={'message': "limites no encontrados"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
+
+#Clases para obtener las cuentas de un usuario especifico
+class CuentasUsuario(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, id=0):
+        if (id>0):
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+            if len(cuentas)>0:
+                datos={'message': "Exito", "cuentas": cuentas}
+            else:
+                datos={'message': "cuentas no encontradas"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
+    
+class TransferenciasUsuario(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+
+    def get(self,request, id=0):
+        if (id>0):
+
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transferencias=[]   
+                for elemento in cuentas:
+                    transferencias=list(transferencia.objects.filter(clave_cuenta=elemento["id"]).values())
+                        
+
+                    if len(transferencias)>0:
+                        for elemento2 in transferencias:
+                            lista_transferencias.append(elemento2)
+
+                if len(lista_transferencias)>0:
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transferencias:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        lista_final.append(elemento)
+                    datos={'message': "Exito", "transferencias": lista_final}
+                else:
+                    datos={'message': "No se encontraron transferencias"}
+                return JsonResponse(datos)
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                return JsonResponse(datos)
+        else:
+
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+
 
