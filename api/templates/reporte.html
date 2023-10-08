@@ -27,13 +27,13 @@
                 <td style="width: 8.34112%;"><strong>Fecha</strong></td>
             </tr>
 
-            {% for item in datos.transacciones %}
+            {% for item in datos.Transacciones %}
 
 
             <tr  style="background-color: #CCEAF4;">
-                <td style="width: 12.5%;">{{item.clave_cuenta_id}}</td>
-                <td style="width: 12.5%;">{{item.clave_categoria_id}}</td>
-                <td style="width: 12.5%;">{{item.clave_subcategoria_id}}</td>
+                <td style="width: 12.5%;">{{item.nombre_cuenta}}</td>
+                <td style="width: 12.5%;">{{item.nombre_categoria}}</td>
+                <td style="width: 12.5%;">{{item.nombre_subcategoria}}</td>
                 <td style="width: 8.17233%;">{{item.tipo}}</td>
                 <td style="width: 16.8277%;">{{item.cantidad}}</td>
                 <td style="width: 9.40881%;">{{item.divisa}}</td>

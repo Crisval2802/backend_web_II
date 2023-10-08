@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte
+from .views import ReporteMes, ReporteSemana, ReporteYear, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -27,17 +27,20 @@ urlpatterns=[
     path('limites/<int:id>', LimitesView.as_view(), name='limites_process'),
     path('limites/usuario/<int:id_usuario>', LimitesUsuario.as_view(), name='limites_usuario'),
 
-    path('transacciones/rango/<str:tipo>/<int:categoria>/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
-    path('transacciones/dia/<str:tipo>/<int:categoria>/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
-    path('transacciones/mes/<str:tipo>/<int:categoria>/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
-    path('transacciones/year/<str:tipo>/<int:categoria>/<int:id>', TransaccionesYear.as_view(), name='transacciones_year'),
-    path('transacciones/semana/<str:tipo>/<int:categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
+    path('transacciones/rango/<str:tipo>/<int:clave_categoria>/<str:fecha>/<str:fecha2>/<int:id>', TransaccionesRango.as_view(), name='transacciones_rango'),
+    path('transacciones/dia/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesDia.as_view(), name='transacciones_dia'),
+    path('transacciones/mes/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
+    path('transacciones/year/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesYear.as_view(), name='transacciones_year'),
+    path('transacciones/semana/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
 
     path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion"),
     path('obtenerdivisa/<str:de_divisa>/<str:a_divisa>', ObtenerDivisa.as_view(), name="ObtenerDivisa"),
 
 
-    path('reporte', FormatoReporte.as_view(), name="FormatoReporte")
-
-
+    path('reporte', FormatoReporte.as_view(), name="FormatoReporte"),
+    path('reporte/rango/<str:tipo>/<int:clave_categoria>/<str:fecha>/<str:fecha2>/<int:id>', ReporteRango.as_view(), name='reporte_rango'),
+    path('reporte/dia/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteDia.as_view(), name='reporte_dia'),
+    path('reporte/mes/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteMes.as_view(), name='reporte_mes'),
+    path('reporte/year/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteYear.as_view(), name='reporte_year'),
+    path('reporte/semana/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteSemana.as_view(), name='reporte_semana'),
 ]

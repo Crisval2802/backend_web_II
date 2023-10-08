@@ -524,7 +524,7 @@ class TransaccionesRango(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request, tipo="",categoria=0, fecha="",fecha2="", id=0):
+    def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         if (id>0):
             
 
@@ -534,13 +534,13 @@ class TransaccionesRango(View):
             if len(cuentas)>0:
                 lista_transacciones=[]   
                 for elemento in cuentas:
-                    if ((tipo=="Ingreso" or tipo=="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(categoria)).values())
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(clave_categoria)).values())
 
-                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
                     
-                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
                         transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
                     else:
                         transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).values())#__range sirve para obtener registros entre 2 rangos de fechas
@@ -551,7 +551,29 @@ class TransaccionesRango(View):
                             lista_transacciones.append(elemento2)
 
                 if len(lista_transacciones)>0:
-                    datos={'message': "Exito", "Transacciones": lista_transacciones}
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Transacciones": lista_final}
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -574,7 +596,7 @@ class TransaccionesDia(View):
 
     
 
-    def get(self,request, tipo="",categoria=0, id=0):
+    def get(self,request, tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
 
@@ -587,21 +609,47 @@ class TransaccionesDia(View):
             if len(cuentas)>0:
                 lista_transacciones=[]   
                 for elemento in cuentas:
-                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=categoria).values())
-                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).values())
-                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
                         transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        
                     else:
+                        
                         transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).values())
+                        
 
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
                             lista_transacciones.append(elemento2)
 
                 if len(lista_transacciones)>0:
-                    datos={'message': "Exito", "Transacciones": lista_transacciones}
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Transacciones": lista_final}
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -624,7 +672,7 @@ class TransaccionesMes(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="",categoria=0, id=0):
+    def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
@@ -637,14 +685,14 @@ class TransaccionesMes(View):
             if len(cuentas)>0:
                 lista_transacciones=[]   
                 for elemento in cuentas:
-                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=categoria).values())
-                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
-                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
                     else:
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
 
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
@@ -659,7 +707,29 @@ class TransaccionesMes(View):
                             lista_filtrada.append(elemento)
 
                     if len(lista_filtrada)>0:
-                        datos={'message': "Exito", "Transaccion": lista_filtrada}
+                        lista_final=[]
+                        #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                        for elemento in lista_filtrada:
+                            #para obtener las cuentas
+                            aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                            for aux_cuenta in aux_cuentas:
+                                elemento['nombre_cuenta']=aux_cuenta['nombre']
+                            #para obtener las categorias
+                            aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                            for aux_categoria in aux_categorias:
+                                elemento['nombre_categoria']=aux_categoria['nombre']
+                            #para obtener las subcategorias
+                            aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                            if len(aux_subcategorias)>0:
+                                for aux_subcategoria in aux_subcategorias:
+                                    elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                            else:
+                                elemento['nombre_subcategoria']="**Ninguna**"
+
+                            lista_final.append(elemento)
+
+
+                        datos={'message': "Exito", "Transacciones": lista_final}
                         return JsonResponse(datos)
                     else:
                         datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -692,7 +762,7 @@ class TransaccionesYear(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="",categoria=0, id=0):
+    def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         aux= parsed_date.split("-")
@@ -706,14 +776,15 @@ class TransaccionesYear(View):
             if len(cuentas)>0:
                 lista_transacciones=[]   
                 for elemento in cuentas:
-                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).filter(clave_categoria=categoria).values())
-                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(clave_categoria=categoria).values())
-                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).filter(tipo=tipo).values())
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
                     else:
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=id).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
                             lista_transacciones.append(elemento2)
@@ -728,7 +799,29 @@ class TransaccionesYear(View):
 
 
                     if len(lista_filtrada)>0:
-                        datos={'message': "Exito", "Transaccion": lista_filtrada}
+                        lista_final=[]
+                        #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                        for elemento in lista_filtrada:
+                            #para obtener las cuentas
+                            aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                            for aux_cuenta in aux_cuentas:
+                                elemento['nombre_cuenta']=aux_cuenta['nombre']
+                            #para obtener las categorias
+                            aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                            for aux_categoria in aux_categorias:
+                                elemento['nombre_categoria']=aux_categoria['nombre']
+                            #para obtener las subcategorias
+                            aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                            if len(aux_subcategorias)>0:
+                                for aux_subcategoria in aux_subcategorias:
+                                    elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                            else:
+                                elemento['nombre_subcategoria']="**Ninguna**"
+
+                            lista_final.append(elemento)
+
+
+                        datos={'message': "Exito", "Transacciones": lista_final}
                         return JsonResponse(datos)
                     else:
                         datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -756,7 +849,7 @@ class TransaccionesSemana(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request,tipo="",categoria=0, id=0):
+    def get(self,request,tipo="",clave_categoria=0, id=0):
         aux2=date.today()
 
         #print(aux2.weekday())
@@ -1742,11 +1835,11 @@ class TransaccionesSemana(View):
             if len(cuentas)>0:
                 lista_transacciones=[]   
                 for elemento in cuentas:
-                    if (tipo=="Ingreso" or tipo=="Gasto" and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=categoria).filter(fecha__range=(inicio, final)).values())
-                    elif((tipo!="Ingreso" and tipo!="Gasto") and categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=categoria).filter(fecha__range=(inicio, final)).values())
-                    elif((tipo=="Ingreso" or tipo=="Gasto") and categoria==0):
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
                         transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
                     else:
                         transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(fecha__range=(inicio, final)).values())
@@ -1756,7 +1849,29 @@ class TransaccionesSemana(View):
                             lista_transacciones.append(elemento2)
 
                 if len(lista_transacciones)>0:
-                    datos={'message': "Exito","Inicio": inicio, "Final": final, "Transacciones": lista_transacciones}
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Inicio": inicio, "Final": final,"Transacciones": lista_final}
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -1906,6 +2021,7 @@ class FormatoReporte(View):
 
     def get(self,request, id=""):
 
+
         transacciones=list(transaccion.objects.values())
 
 
@@ -1933,7 +2049,7 @@ class FormatoReporte(View):
 
                 lista_final.append(elemento)
 
-            datos={"transacciones": lista_final,"fecha": date.today(), "usuario":"Cristian Armando Valenzuela Acosta"}
+            datos={"Transacciones": lista_final,"fecha": date.today(), "usuario":"Cristian Armando Valenzuela Acosta"}
         else:
             datos={'message': "transacciones no encontradas"}
 
@@ -1956,7 +2072,1457 @@ class FormatoReporte(View):
         return response
     
         
+#Clases para generar reportes
+
+class ReporteRango(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
+        if (id>0):
+
+            # Se obtiene el nombre del usuario
+            usuarios=list(usuario.objects.filter(id=id).values())
+
+            for aux in usuarios:
+                nombre_usuario=aux['nombre']
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
 
 
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(clave_categoria)).values())
 
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                    
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).values())#__range sirve para obtener registros entre 2 rangos de fechas
+                    
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Transacciones": lista_final,"fecha": date.today(), "usuario":nombre_usuario}
+                    #Proceso para convertir el html a pdf
+                    template = get_template('reporte.html')
+                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+                    
+                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+                    response = HttpResponse(content_type='application/pdf')
+                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+                    # Convierte el HTML a PDF y escribe en la respuesta
+                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    
+                    # Si la conversión tuvo éxito, devuelve la respuesta
+                    if pisa_status.err:
+                        return HttpResponse('Error al generar el PDF')
+                    
+                    return response
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+    
+class ReporteDia(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+
+        if (id>0):
+            # Se obtiene el nombre del usuario
+            usuarios=list(usuario.objects.filter(id=id).values())
+
+            for aux in usuarios:
+                nombre_usuario=aux['nombre']
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        
+                    else:
+                        
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).values())
+                        
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
+                    #Proceso para convertir el html a pdf
+                    template = get_template('reporte.html')
+                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+                    
+                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+                    response = HttpResponse(content_type='application/pdf')
+                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+                    # Convierte el HTML a PDF y escribe en la respuesta
+                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    
+                    # Si la conversión tuvo éxito, devuelve la respuesta
+                    if pisa_status.err:
+                        return HttpResponse('Error al generar el PDF')
+                    
+                    return response
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+    
+class ReporteMes(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request,tipo="",clave_categoria=0, id=0):
         
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        aux= parsed_date.split("-")
+        if (id>0):
+            
+            # Se obtiene el nombre del usuario
+            usuarios=list(usuario.objects.filter(id=id).values())
+
+            for aux_user in usuarios:
+                nombre_usuario=aux_user['nombre']
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                        
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                        
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_filtrada=[]
+
+                    for elemento in lista_transacciones:
+                        fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                        if fecha[1]==aux[1] and fecha[0]==aux[0]:
+                            lista_filtrada.append(elemento)
+
+                    if len(lista_filtrada)>0:
+                        lista_final=[]
+                        #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                        for elemento in lista_filtrada:
+                            #para obtener las cuentas
+                            aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                            for aux_cuenta in aux_cuentas:
+                                elemento['nombre_cuenta']=aux_cuenta['nombre']
+                            #para obtener las categorias
+                            aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                            for aux_categoria in aux_categorias:
+                                elemento['nombre_categoria']=aux_categoria['nombre']
+                            #para obtener las subcategorias
+                            aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                            if len(aux_subcategorias)>0:
+                                for aux_subcategoria in aux_subcategorias:
+                                    elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                            else:
+                                elemento['nombre_subcategoria']="**Ninguna**"
+
+                            lista_final.append(elemento)
+
+
+                        datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
+                        #Proceso para convertir el html a pdf
+                        template = get_template('reporte.html')
+                        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+                        
+                        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+                        response = HttpResponse(content_type='application/pdf')
+                        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+                        # Convierte el HTML a PDF y escribe en la respuesta
+                        pisa_status = pisa.CreatePDF(html, dest=response)
+                        
+                        # Si la conversión tuvo éxito, devuelve la respuesta
+                        if pisa_status.err:
+                            return HttpResponse('Error al generar el PDF')
+                        
+                        return response
+                    else:
+                        datos={'message': "No se encontraron transacciones asociadooos a ese usuario"}
+                        return JsonResponse(datos)
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                    return JsonResponse(datos)
+                    
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+                    
+class ReporteYear(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request,tipo="",clave_categoria=0, id=0):
+        
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        aux= parsed_date.split("-")
+            
+        if (id>0):
+            
+             # Se obtiene el nombre del usuario
+            usuarios=list(usuario.objects.filter(id=id).values())
+
+            for aux_user in usuarios:
+                nombre_usuario=aux_user['nombre']
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_filtrada=[]
+
+                    for elemento in lista_transacciones:
+                        fecha=(elemento['fecha'].strftime("%Y-%m-%d")).split("-")
+                        if fecha[0]==aux[0]:
+                            lista_filtrada.append(elemento)
+
+
+                    if len(lista_filtrada)>0:
+                        lista_final=[]
+                        #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                        for elemento in lista_filtrada:
+                            #para obtener las cuentas
+                            aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                            for aux_cuenta in aux_cuentas:
+                                elemento['nombre_cuenta']=aux_cuenta['nombre']
+                            #para obtener las categorias
+                            aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                            for aux_categoria in aux_categorias:
+                                elemento['nombre_categoria']=aux_categoria['nombre']
+                            #para obtener las subcategorias
+                            aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                            if len(aux_subcategorias)>0:
+                                for aux_subcategoria in aux_subcategorias:
+                                    elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                            else:
+                                elemento['nombre_subcategoria']="**Ninguna**"
+
+                            lista_final.append(elemento)
+
+
+                        datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
+                        #Proceso para convertir el html a pdf
+                        template = get_template('reporte.html')
+                        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+                        
+                        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+                        response = HttpResponse(content_type='application/pdf')
+                        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+                        # Convierte el HTML a PDF y escribe en la respuesta
+                        pisa_status = pisa.CreatePDF(html, dest=response)
+                        
+                        # Si la conversión tuvo éxito, devuelve la respuesta
+                        if pisa_status.err:
+                            return HttpResponse('Error al generar el PDF')
+                        
+                        return response
+                    else:
+                        datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                        return JsonResponse(datos)
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                    return JsonResponse(datos)
+                    
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+  
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+
+class ReporteSemana(View):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self,request,tipo="",clave_categoria=0, id=0):
+        aux2=date.today()
+
+        #print(aux2.weekday())
+
+        fecha_inicial=["0000","00","00"]
+        fecha_final=["0000","00","00"]
+
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d") # Se obtiene la fecha actual en formato YYYY-MM-DD
+
+        aux= parsed_date.split("-") # auxiliar que contendra la fecha divida en a;o, mes y dia
+
+        if (aux2.weekday()==0): # Es lunes
+            if (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12"): # se validan meses con 31 dias
+                if ((int(aux[2]) + 6) > 31): # se da un brinco de mes entre el inicio y el fin de semana
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 31)
+                    if (aux[1]=="12"): #Es diciembre y se tiene que guardar los datos de la fecha final del rango de la semana
+                        fecha_final[0] = str(int(aux[0])+1) #Se suma 1 al a;o
+                        fecha_final[1] = "01"   # El mes es enero
+                        fecha_final[2] = dias_restantes
+
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    else:
+                        fecha_final[0] = aux[0]
+                        
+                        if (int(aux[1]) + 1>9): # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                            fecha_final[1] =str (int(aux[1]) + 1)
+                        else:
+                            fecha_final[1] ="0" + str(int(aux[1]) + 1)
+                        fecha_final[2] = dias_restantes
+                        
+                        
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+
+            elif (aux[1]=="02"):
+                if ((int(aux[2]) + 6) > 28):
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 28)
+                    
+                    fecha_final[0] = aux[0]
+                    
+                    fecha_final[1] = "03"
+                    
+                    fecha_final[2] = dias_restantes
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # se validan meses con 30 dias
+                if ((int(aux[2]) + 6) > 30):
+                    dias_restantes= "0" + str((int(aux[2]) + 6) - 30)
+                    if (aux[1]=="12"): #Es diciembre y se tiene que guardar los datos de la fecha final del rango de la semana
+                        fecha_final[0] = str(int(aux[0])+1) #Se suma 1 al a;o
+                        fecha_final[1] = "01"   # El mes es enero
+                        fecha_final[2] = dias_restantes
+
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    else:
+                        fecha_final[0] = aux[0]
+                        
+                        if (int(aux[1]) + 1>9): # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                            fecha_final[1] =str (int(aux[1]) + 1)
+                        else:
+                            fecha_final[1] ="0" + str(int(aux[1]) + 1)
+                        fecha_final[2] = dias_restantes
+                        
+                        
+                        fecha_inicial[0] = aux[0]
+                        fecha_inicial[1] = aux[1]
+                        fecha_inicial[2] = aux[2]
+
+                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                else:
+                    fecha_final[0] = aux[0]
+                    fecha_final[1] = aux[1]
+                    if ((int(aux[2]) + 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_final[2] =str (int(aux[2]) + 6)
+                    else:
+                        fecha_final[2] ="0" + str(int(aux[2]) + 6)
+
+                    fecha_inicial[0] = aux[0]
+                    fecha_inicial[1] = aux[1]
+                    fecha_inicial[2] = aux[2]
+
+                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==1): # Es martes
+            if (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+5)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif ((int(aux[2]) + 5> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 5) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-1)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-1)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-1)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-1)
+
+                if((int(aux[2])+5)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+5)
+                else:
+                    fecha_final[2]=str(int(aux[2])+5)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==2): # Es miercoles
+            if (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+4)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+4)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 4> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 4) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-2)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-2)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-2)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-2)
+
+                if((int(aux[2])+4)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+4)
+                else:
+                    fecha_final[2]=str(int(aux[2])+4)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==3): # Es jueves
+            if (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+3)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 3> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 3) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-3)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-3)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-3)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-3)
+
+                if((int(aux[2])+3)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+3)
+                else:
+                    fecha_final[2]=str(int(aux[2])+3)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==4): # Es viernes
+            if (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "28"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "28"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "25"
+                    else:
+                        fecha_inicial[2] = "27"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+2)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 2> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 2) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-4)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-4)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-4)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-4)
+
+                if((int(aux[2])+2)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+2)
+                else:
+                    fecha_final[2]=str(int(aux[2])+2)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==5): # Es sabado
+            if (aux[2]=="05"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "31"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "31"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "28"
+                    else:
+                        fecha_inicial[2] = "30"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "30"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "30"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "27"
+                    else:
+                        fecha_inicial[2] = "29"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="03"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "29"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "29"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "26"
+                    else:
+                        fecha_inicial[2] = "28"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "28"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "28"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "25"
+                    else:
+                        fecha_inicial[2] = "27"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
+                if (aux[1]=="01"):
+                    fecha_inicial[0] = str(int(aux[0])-1)
+                    fecha_inicial[1] = "12"
+                    fecha_inicial[2] = "27"
+                else:
+                    fecha_inicial[0] = aux[0]
+                    if (int(aux[1])-1 >= 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        fecha_inicial[1] =str (int(aux[1])-1)
+                        mes_anterior=str(int(aux[1])-1)
+                    else:
+                        fecha_inicial[1] ="0" + str(int(aux[1])-1)
+                        mes_anterior="0" + str(int(aux[1])-1)
+
+                    if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10"):
+                        fecha_inicial[2] = "27"
+                    elif (mes_anterior=="02"):
+                        fecha_inicial[2] = "24"
+                    else:
+                        fecha_inicial[2] = "26"
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+                fecha_final[2]="0" + str (int(aux[2])+1)
+
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
+                if (aux[1]=="12"): # se cambia de anio
+                    fecha_final[0]= str(int(aux[0]) + 1)
+                    fecha_final[1]= "01"
+                else:
+                    fecha_final[0]=aux[0] #el anio queda igual
+                    if((int(aux[1])+1)<10):
+                        fecha_final[1]="0" + str(int(aux[1])+1)
+                    else:
+                        fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 31)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 28) and aux[1]=="02"):
+                fecha_final[0]=aux[0]
+                fecha_final[1]="03"
+                
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 28)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            elif ((int(aux[2]) + 1> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
+
+                fecha_final[0]=aux[0] #el anio queda igual
+                if((int(aux[1])+1)<10):
+                    fecha_final[1]="0" + str(int(aux[1])+1)
+                else:
+                    fecha_final[1]=str(int(aux[1])+1)
+                
+
+                dias_restantes= "0" + str((int(aux[2]) + 1) - 30)
+                fecha_final[2] = dias_restantes
+
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+                fecha_inicial[2]= str(int(aux[2])-5)
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+            else: # la semana inicia y termina el mismo mes
+                fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=aux[1]
+
+                if((int(aux[2])-5)<10):
+                    fecha_inicial[2]="0" + str(int(aux[2])-5)
+                else:
+                    fecha_inicial[2]=str(int(aux[2])-5)
+
+                if((int(aux[2])+1)<10):
+                    fecha_final[2]="0" + str(int(aux[2])+1)
+                else:
+                    fecha_final[2]=str(int(aux[2])+1)
+
+                fecha_final[0]=aux[0]
+                fecha_final[1]=aux[1]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+        elif (aux2.weekday()==6): # es domingo
+
+            if ((int(aux[2]) - 6) < 1): # se da un brinco de mes entre el inicio y el fin de semana
+                dias_restantes=(6 - int(aux[2]))
+                if (aux[1]=="01"):
+                    mes_anterior="12"
+                    fecha_inicial[0]=str(int(aux[0])-1)
+                else:
+                    if((int(aux[1])-1)<10):    # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                        mes_anterior="0" + str(int(aux[1])-1)
+                    else:
+                        mes_anterior=str(int(aux[1])-1)
+                    fecha_inicial[0]=aux[0]
+                fecha_inicial[1]=mes_anterior
+                if (mes_anterior=="01" or mes_anterior=="03" or mes_anterior=="05" or mes_anterior=="07" or mes_anterior=="08" or mes_anterior=="10" or mes_anterior=="12"):
+                    fecha_inicial[2]=str(31-dias_restantes)
+                elif (mes_anterior=="02"):
+                    fecha_inicial[2]=str(28-dias_restantes)
+                else:
+                    fecha_inicial[2]=str(30-dias_restantes)
+                fecha_final[0] = aux[0]
+                fecha_final[1] = aux[1]
+                fecha_final[2] = aux[2]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+                
+            else: # solo se resta para llegar al rango de fechas
+                fecha_inicial[0] = aux[0]
+                fecha_inicial[1] = aux[1]
+                if ((int(aux[2]) - 6) > 10) : # Validacion para evitar conflictos con el formato, ya que si es menor a 10 es resultado puede quedar por ejemplo como 9 en vez de 09
+                    fecha_inicial[2] =str (int(aux[2]) - 6)
+                else:
+                    fecha_inicial[2] ="0" + str(int(aux[2]) - 6)
+
+
+                fecha_final[0] = aux[0]
+                fecha_final[1] = aux[1]
+                fecha_final[2] = aux[2]
+
+                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
+                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+
+            
+
+        inicio=fecha_inicial[0]+"-" + fecha_inicial[1]+"-"+fecha_inicial[2]
+        final=fecha_final[0]+"-" + fecha_final[1]+"-"+fecha_final[2]
+
+        if (id>0):
+            
+            # Se obtiene el nombre del usuario
+            usuarios=list(usuario.objects.filter(id=id).values())
+
+            for aux_user in usuarios:
+                nombre_usuario=aux_user['nombre']
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                    elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
+                    else:
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(fecha__range=(inicio, final)).values())
+                    
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+
+                    datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
+                    #Proceso para convertir el html a pdf
+                    template = get_template('reporte.html')
+                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
+                    
+                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+                    response = HttpResponse(content_type='application/pdf')
+                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+
+                    # Convierte el HTML a PDF y escribe en la respuesta
+                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    
+                    # Si la conversión tuvo éxito, devuelve la respuesta
+                    if pisa_status.err:
+                        return HttpResponse('Error al generar el PDF')
+                    
+                    return response
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+
