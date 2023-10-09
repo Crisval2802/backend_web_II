@@ -144,3 +144,6 @@ EMAL_USE_SSL=False
 EMAIL_POST = 587
 EMAIL_HOST_USER = 'cristian.proyectoweb@outlook.com'
 EMAIL_HOST_PASSWORD = 'rltcpecyjsiooqjl'
+
+LOGIN_URL="/api/login"
+STAF_LOGIN_URL="/api/login"

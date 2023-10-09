@@ -11,17 +11,24 @@ from xhtml2pdf import pisa
 from typing import Any
 from django import http
 from django.http.response import JsonResponse 
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from .models import usuario, cuenta, categoria, subcategoria, transaccion, transferencia, objetivo, limite
 from django.utils.decorators import method_decorator
 from datetime import datetime, date
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.contrib.admin.views.decorators import staff_member_required
+
+
 from django.conf import settings
 from django.core.mail import send_mail, EmailMultiAlternatives
+from django.contrib.auth import authenticate, login, logout
+from django.contrib import messages
 
 #Clases para aplicar los metodos get,post,put y delete a cada uno de los 8 modelos de la BD
+
 class UsuarioView(View):
 
     @method_decorator(csrf_exempt)
@@ -29,7 +36,7 @@ class UsuarioView(View):
         return super().dispatch(request, *args, **kwargs)
 
 
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def get(self,request, id=0):
         if (id>0):
             usuarios=list(usuario.objects.filter(id=id).values())
@@ -51,10 +58,20 @@ class UsuarioView(View):
     def post (self,request):
         jd=json.loads(request.body)
         
-        usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
 
-        datos={'message': "Exito"}
-        return JsonResponse(datos)
+        usuarios=list(usuario.objects.filter(correo=jd["correo"]).values())
+        if len(usuarios)>0:
+            datos={'message': "Error, ya existe un registro con ese correo"}
+            return JsonResponse(datos)
+        else:
+            #se crea el usuario
+            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
+            #Se crea el usuario para el login
+            user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
+
+            user.save()
+            datos={'message': "Exito"}
+            return JsonResponse(datos)
 
     def put (self,request, id=0):
         valor_divisa=""
@@ -68,6 +85,11 @@ class UsuarioView(View):
             
             if(jd["contra"] !=""):
                 aux.contra=jd["contra"]
+                aux_user = User.objects.get(username=aux.correo)
+                aux_user.set_password(jd['contra'])
+                aux_user.save()
+                
+
             
             if(jd["divisa"] !=""):
                 de_divisa=aux.divisa
@@ -117,6 +139,7 @@ class UsuarioView(View):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def delete (self,request, id):
         usuarios=list(usuario.objects.filter(id=id).values())
         if len(usuarios)>0:
@@ -135,7 +158,8 @@ class CuentasView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-    
+
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def get(self,request, id=0):
         if (id>0):
             cuentas=list(cuenta.objects.filter(id=id).values())
@@ -175,6 +199,7 @@ class CuentasView(View):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def delete (self,request, id):
         cuentas=list(cuenta.objects.filter(id=id).values())
         if len(cuentas)>0:
@@ -191,7 +216,7 @@ class CategoriasView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             categorias=list(categoria.objects.filter(id=id).values())
@@ -235,6 +260,7 @@ class CategoriasView(View):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         categorias=list(categoria.objects.filter(id=id).values())
         if len(categorias)>0:
@@ -251,7 +277,7 @@ class SubCategoriasView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             subcategorias=list(subcategoria.objects.filter(id=id).values())
@@ -291,6 +317,7 @@ class SubCategoriasView(View):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         subcategorias=list(subcategoria.objects.filter(id=id).values())
         if len(subcategorias)>0:
@@ -309,7 +336,7 @@ class TransaccionesView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         
         if (id>0):
@@ -441,6 +468,7 @@ class TransaccionesView(View):
     def put (self,request, id=0):
         pass
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         transacciones=list(transaccion.objects.filter(id=id).values())
         if len(transacciones)>0:
@@ -457,7 +485,7 @@ class TransferenciasView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             transferencias=list(transferencia.objects.filter(id=id).values())
@@ -511,6 +539,7 @@ class TransferenciasView(View):
     def put (self,request, id=0):
         pass
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         transferencias=list(transferencia.objects.filter(id=id).values())
         if len(transferencias)>0:
@@ -527,7 +556,7 @@ class ObjetivosView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             objetivos=list(objetivo.objects.filter(id=id).values())
@@ -561,6 +590,7 @@ class ObjetivosView(View):
     def put (self,request, id=0):
         pass
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         objetivos=list(objetivo.objects.filter(id=id).values())
         if len(objetivos)>0:
@@ -577,7 +607,7 @@ class LimitesView(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             limites=list(limite.objects.filter(id=id).values())
@@ -611,6 +641,7 @@ class LimitesView(View):
     def put (self,request, id=0):
         pass
     
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def delete (self,request, id):
         limites=list(limite.objects.filter(id=id).values())
         if len(limites)>0:
@@ -620,6 +651,8 @@ class LimitesView(View):
             datos={'message': "limite no encontrado"}
         return JsonResponse(datos)
 
+
+
 #Clase que contiene el metodo get para obtener las transacciones realizadas entre dos fechas y un usuario especifico
 class TransaccionesRango(View):
 
@@ -627,6 +660,7 @@ class TransaccionesRango(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         if (id>0):
             
@@ -698,7 +732,7 @@ class TransaccionesDia(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -774,7 +808,8 @@ class TransaccionesMes(View):
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
-
+    
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -864,7 +899,7 @@ class TransaccionesYear(View):
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -952,6 +987,7 @@ class TransaccionesSemana(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         aux2=date.today()
 
@@ -2000,15 +2036,15 @@ class CorreoRecuperacion(View):
         return super().dispatch(request, *args, **kwargs)
 
     def post(self,request):
-        jd=json.loads(request.body)
-        correos=list(usuario.objects.filter(correo=jd["txt_email"]).values())
+
+        correos=list(usuario.objects.filter(correo=request.POST.get('txt_email')).values())
         if len(correos)>0:
             for correo in correos:
 
-                asunto = "Mensaje de Django"
-                mensaje = "Esto es un mensaje de prueba para el envio de correos:\nTu contraseña es: " + correo['contra']
+                asunto = "Administrador de Ingresos y Gastos: Recuperar Contraseña"
+                mensaje = "Se ha realizado una solicitud para recuperar la contraseña vinculada a este correo\nTu contraseña es: " + correo['contra']
                 email_desde = settings.EMAIL_HOST_USER
-                email_para = jd["txt_email"]
+                email_para = request.POST.get('txt_email')
                 msg=EmailMultiAlternatives(asunto, mensaje, email_desde, [email_para])
                 msg.send()
 
@@ -2016,7 +2052,7 @@ class CorreoRecuperacion(View):
                 datos={'message': "correo enviado"}
                 return JsonResponse(datos)
         else:
-            datos={'message': "correo no encontrado"}
+            datos={'message': "No se encontro un usuario con ese correo"}
             return JsonResponse(datos)
         
 
@@ -2026,7 +2062,7 @@ class ObtenerDivisa(View):
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, de_divisa="", a_divisa=""):
         url_api = "https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/" + de_divisa + "/" + a_divisa + ".json"
         response = requests.get(url_api)
@@ -2046,6 +2082,7 @@ class FormatoReporte(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=""):
 
 
@@ -2106,6 +2143,7 @@ class ReporteRango(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         if (id>0):
 
@@ -2196,6 +2234,7 @@ class ReporteDia(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
 
@@ -2288,6 +2327,7 @@ class ReporteMes(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -2393,6 +2433,7 @@ class ReporteYear(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -2495,6 +2536,7 @@ class ReporteSemana(View):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
+    @method_decorator(login_required, name='dispatch')
     def get(self,request,tipo="",clave_categoria=0, id=0):
         aux2=date.today()
 
@@ -3562,7 +3604,7 @@ class LimitesUsuario(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             limites=list(limite.objects.filter(clave_usuario=id).values())
@@ -3601,7 +3643,7 @@ class ObjetivosUsuario(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             objetivos=list(objetivo.objects.filter(clave_usuario=id).values())
@@ -3641,7 +3683,7 @@ class CuentasUsuario(View):
         return super().dispatch(request, *args, **kwargs)
 
     
-
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=0):
         if (id>0):
             cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
@@ -3656,14 +3698,81 @@ class CuentasUsuario(View):
            
         return JsonResponse(datos)
     
-class TransferenciasUsuario(View):
+#Clases para obtener las categorias de un determinado usuario
+class CategoriasUsuario(View):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
     
+    @method_decorator(login_required, name='dispatch')
+    def get(self,request, id=0):
+        if (id>0):
+            categorias=list(categoria.objects.filter(clave_usuario=id).values())
+            if len(categorias)>0:
+                
 
+
+                datos={'message': "Exito", "Categorias": categorias}
+            else:
+                datos={'message': "Categorias no encontradas"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
+    
+#Clases para obtener las subcategorias de un determinado usuario
+class SubCategoriasUsuario(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+    @method_decorator(login_required, name='dispatch')
+    def get(self,request, id=0):
+        if (id>0):
+            categorias=list(categoria.objects.filter(clave_usuario=id).values())
+            if len(categorias)>0:
+                lista_sub=[]
+
+                for elemento in categorias:
+
+
+                    subcategorias=list(subcategoria.objects.filter(clave_categoria=elemento["id"]).values())
+                    
+
+                    if len(subcategorias)>0:
+                        for elemento2 in subcategorias:
+                            lista_sub.append(elemento2)
+
+
+                if len(lista_sub)>0:
+
+                    datos={'message': "Exito", "Subcategorias": lista_sub}
+                else:
+                    datos={'message': "Subcategorias no encontradas"}
+            else:
+                datos={'message': "Categorias no encontradas"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
+
+class TransferenciasUsuario(View): #Se requiere login
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+    #Metodo para que sea necesario estar logeado @method_decorator(login_required, name='dispatch')
+    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=0):
         if (id>0):
 
@@ -3703,3 +3812,48 @@ class TransferenciasUsuario(View):
             return JsonResponse(datos)
 
 
+class Login(View):
+
+  
+
+    def get(self,request):
+        return render(request, 'login.html')
+
+    def post(self, request):
+
+        username = request.POST.get('correo')
+        password = request.POST.get('contra')
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+
+            return redirect('inicio')
+        else:
+            datos={'message': "Inicio Incorrecto"}
+            return JsonResponse(datos)
+
+class Inicio(View):
+
+  
+
+    @method_decorator(login_required, name='dispatch')
+    def get(self,request):
+        return render(request, 'bienvenido.html')
+
+
+class Logout(View):
+
+  
+
+    def post(self, request):
+        logout(request)
+        return redirect('login')
+    
+
+
+class RecuperarContra(View):
+
+  
+
+    def get(self,request):
+        return render(request, 'recuperar_contra.html')

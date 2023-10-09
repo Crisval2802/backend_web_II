@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión</title>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Iniciar Sesión</h2>
+        <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            <p>Correo:</p>
+            <input type="text" name="correo">
+            <br></br>
+            <p>Password:</p>
+            <input type="password" name="contra">
+            <br>
+            <button type="submit" class="btn btn-primary">Iniciar Sesión</button>
+        </form>
+
+        <br>
+        <a href="{% url 'recuperar_contra' %}">Olvidaste tu contraseña?</a>
+    </div>
+</body>
+</html>

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CuentasUsuario, ReporteMes, ReporteSemana, ReporteYear, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from .views import CategoriasUsuario, CuentasUsuario, Inicio, Login, Logout, RecuperarContra, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -10,9 +10,11 @@ urlpatterns=[
 
     path('categorias/', CategoriasView.as_view(), name='categorias_list'),
     path('categorias/<int:id>', CategoriasView.as_view(), name='categorias_process'),
+    path('categorias/usuario/<int:id>', CategoriasUsuario.as_view(), name='categorias_usuario'),
 
     path('subcategorias/', SubCategoriasView.as_view(), name='subcategorias_list'),
     path('subcategorias/<int:id>', SubCategoriasView.as_view(), name='subcategorias_process'),
+    path('subcategorias/usuario/<int:id>', SubCategoriasUsuario.as_view(), name='subcategorias_usuario'),
 
     path('transacciones/', TransaccionesView.as_view(), name='transacciones_list'),
     path('transacciones/<int:id>', TransaccionesView.as_view(), name='transacciones_process'),
@@ -45,4 +47,13 @@ urlpatterns=[
     path('reporte/mes/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteMes.as_view(), name='reporte_mes'),
     path('reporte/year/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteYear.as_view(), name='reporte_year'),
     path('reporte/semana/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteSemana.as_view(), name='reporte_semana'),
+
+
+
+
+    path('login', Login.as_view(), name='login'),
+    path('inicio', Inicio.as_view(), name='inicio'),
+    path('logout', Logout.as_view(), name='logout'),
+    path('recuperarcontra', RecuperarContra.as_view(), name='recuperar_contra'),
+
 ]
