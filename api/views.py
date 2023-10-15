@@ -2,7 +2,7 @@ import json
 import datetime #para el manejo de fechas
 import requests
 
-
+from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
@@ -299,7 +299,11 @@ class SubCategoriasView(View):
     def post (self,request):
         jd=json.loads(request.body)
         
-        subcategoria.objects.create(clave_categoria_id=jd["clave_categoria"],total_transacciones=jd["total_transacciones"], total_dinero=jd["total_dinero"], tipo=jd["tipo"], nombre=jd["nombre"])
+        subcategoria.objects.create(clave_categoria_id=jd["clave_categoria"],
+                                    total_transacciones=0, 
+                                    total_dinero=0, 
+                                    tipo=jd["tipo"], 
+                                    nombre=jd["nombre"])
 
         datos={'message': "Exito"}
         return JsonResponse(datos)
@@ -437,12 +441,6 @@ class TransaccionesView(View):
                     aux_limite=limite.objects.get(id=clave)
                     aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
                     aux_limite.save()
-
-
-
-
-
-
 
         aux_cuenta.save()
         aux_usuario.save()
@@ -2047,8 +2045,6 @@ class CorreoRecuperacion(View):
                 email_para = request.POST.get('txt_email')
                 msg=EmailMultiAlternatives(asunto, mensaje, email_desde, [email_para])
                 msg.send()
-
-
                 datos={'message': "correo enviado"}
                 return JsonResponse(datos)
         else:
@@ -3814,20 +3810,22 @@ class TransferenciasUsuario(View): #Se requiere login
 
 class Login(View):
 
-  
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
 
     def get(self,request):
         return render(request, 'login.html')
-
+    
+   
     def post(self, request):
-
-        username = request.POST.get('correo')
-        password = request.POST.get('contra')
+        jd=json.loads(request.body)
+        username = jd['correo']
+        password = jd['contra']
         user = authenticate(request, username=username, password=password)
         if user is not None:
-            login(request, user)
-
-            return redirect('inicio')
+            datos={'message': "Inicio correcto"}
+            return JsonResponse(datos)
         else:
             datos={'message': "Inicio Incorrecto"}
             return JsonResponse(datos)
@@ -3857,3 +3855,11 @@ class RecuperarContra(View):
 
     def get(self,request):
         return render(request, 'recuperar_contra.html')
+
+
+class Redirigir(View):
+
+  
+    @method_decorator(login_required, name='dispatch')
+    def get(self,request):
+        return redirect("inicio")

@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoriasUsuario, CuentasUsuario, Inicio, Login, Logout, RecuperarContra, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from .views import CategoriasUsuario, CuentasUsuario, Inicio, Login, Logout, RecuperarContra, Redirigir, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -55,5 +55,7 @@ urlpatterns=[
     path('inicio', Inicio.as_view(), name='inicio'),
     path('logout', Logout.as_view(), name='logout'),
     path('recuperarcontra', RecuperarContra.as_view(), name='recuperar_contra'),
+
+    path('', Redirigir.as_view(), name= "redirigir")
 
 ]
