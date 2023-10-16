@@ -2,6 +2,14 @@ import json
 import datetime #para el manejo de fechas
 import requests
 
+
+from rest_framework.authtoken.models import Token
+from rest_framework.decorators import authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.views import APIView
+
+
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from django.template.loader import get_template
@@ -26,17 +34,16 @@ from django.conf import settings
 from django.core.mail import send_mail, EmailMultiAlternatives
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
-
+from django.views.decorators.csrf import csrf_protect
 #Clases para aplicar los metodos get,post,put y delete a cada uno de los 8 modelos de la BD
 
-class UsuarioView(View):
-
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class UsuarioView(APIView):
 
 
-    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
+    #@method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
+  
     def get(self,request, id=0):
         if (id>0):
             usuarios=list(usuario.objects.filter(id=id).values())
@@ -3817,14 +3824,17 @@ class Login(View):
     def get(self,request):
         return render(request, 'login.html')
     
-   
     def post(self, request):
         jd=json.loads(request.body)
+        # username = request.POST.get('correo')
+        # password = request.POST.get('contra')
         username = jd['correo']
         password = jd['contra']
         user = authenticate(request, username=username, password=password)
         if user is not None:
-            datos={'message': "Inicio correcto"}
+            login(request, user)
+            token, created = Token.objects.get_or_create(user=user)
+            datos={'message': "Inicio correcto", "token": token.key}
             return JsonResponse(datos)
         else:
             datos={'message': "Inicio Incorrecto"}
