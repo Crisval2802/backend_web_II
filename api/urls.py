@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoriasUsuario, CuentasUsuario, Inicio, Login, Logout, RecuperarContra, Redirigir, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Transaccion, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -11,6 +11,8 @@ urlpatterns=[
     path('categorias/', CategoriasView.as_view(), name='categorias_list'),
     path('categorias/<int:id>', CategoriasView.as_view(), name='categorias_process'),
     path('categorias/usuario/<int:id>', CategoriasUsuario.as_view(), name='categorias_usuario'),
+    path('categorias/usuario/gasto/<int:id>', CategoriasGastoUsuario.as_view(), name='categorias_usuario_gasto'),
+    path('categorias/usuario/ingreso/<int:id>', CategoriasIngresoUsuario.as_view(), name='categorias_ingreso_gasto'),
 
     path('subcategorias/', SubCategoriasView.as_view(), name='subcategorias_list'),
     path('subcategorias/<int:id>', SubCategoriasView.as_view(), name='subcategorias_process'),
@@ -52,10 +54,11 @@ urlpatterns=[
 
 
     path('login', Login.as_view(), name='login'),
-    path('inicio', Inicio.as_view(), name='inicio'),
-    path('logout', Logout.as_view(), name='logout'),
-    path('recuperarcontra', RecuperarContra.as_view(), name='recuperar_contra'),
 
-    path('', Redirigir.as_view(), name= "redirigir")
 
+
+    path('crear/usuarios/', Crear_Usuario.as_view(), name='usuarios_create'),
+    path('crear/transaccion/', Crear_Transaccion.as_view(), name='transaccion_create'),
+
+    path('obtener/balance/<int:id>', Obtener_Balance.as_view(), name='Obtener_balance'),
 ]

@@ -42,8 +42,7 @@ from django.views.decorators.csrf import csrf_protect
 class UsuarioView(APIView):
 
 
-    #@method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
-  
+    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def get(self,request, id=0):
         if (id>0):
             usuarios=list(usuario.objects.filter(id=id).values())
@@ -62,23 +61,7 @@ class UsuarioView(APIView):
                 datos={'message': "Usuarios no encontrados"}
             return JsonResponse(datos)
 
-    def post (self,request):
-        jd=json.loads(request.body)
-        
-
-        usuarios=list(usuario.objects.filter(correo=jd["correo"]).values())
-        if len(usuarios)>0:
-            datos={'message': "Error, ya existe un registro con ese correo"}
-            return JsonResponse(datos)
-        else:
-            #se crea el usuario
-            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
-            #Se crea el usuario para el login
-            user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
-
-            user.save()
-            datos={'message': "Exito"}
-            return JsonResponse(datos)
+    
 
     def put (self,request, id=0):
         valor_divisa=""
@@ -146,7 +129,7 @@ class UsuarioView(APIView):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
-    @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
+    #@method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
     def delete (self,request, id):
         usuarios=list(usuario.objects.filter(id=id).values())
         if len(usuarios)>0:
@@ -157,8 +140,9 @@ class UsuarioView(APIView):
         return JsonResponse(datos)
     
    
-
-class CuentasView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CuentasView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -216,7 +200,9 @@ class CuentasView(View):
             datos={'message': "Cuenta no encontrada"}
         return JsonResponse(datos)
     
-class CategoriasView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])    
+class CategoriasView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -277,7 +263,9 @@ class CategoriasView(View):
             datos={'message': "Categoria no encontrada"}
         return JsonResponse(datos)
 
-class SubCategoriasView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class SubCategoriasView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -338,7 +326,9 @@ class SubCategoriasView(View):
             datos={'message': "Subcategoria no encontrado"}
         return JsonResponse(datos)
 
-class TransaccionesView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesView(APIView):
 
     
 
@@ -368,108 +358,6 @@ class TransaccionesView(View):
                 datos={'message': "transacciones no encontradas"}
             return JsonResponse(datos)
 
-    def post (self,request):
-        jd=json.loads(request.body)
-        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-        transaccion.objects.create(clave_cuenta_id=jd["clave_cuenta"],
-                                   clave_categoria_id=jd["clave_categoria"],
-                                   clave_subcategoria_id=jd["clave_subcategoria"],
-                                   tipo=jd["tipo"],
-                                   cantidad=jd["cantidad"],
-                                   divisa=jd["divisa"],
-                                   fecha=parsed_date,
-                                   comentarios=jd["comentarios"])
-
-        datos={'message': "Exito"}
-
-        #Cambio de balances
-        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta'])
-
-        clave_usuario=aux_cuenta.clave_usuario_id
-
-        aux_usuario=usuario.objects.get(id=int(clave_usuario))
-
-
-        balance=float(aux_cuenta.balance)
-        # se resta o suma del balance segun sea el caso
-        if (jd['tipo']=="Ingreso"):
-            balance= balance + float(jd['cantidad'])
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance + float(jd['cantidad'])
-            aux_usuario.balance = balance
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
-                    aux_objetivo.save()
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
-                    aux_objetivo.save()
-
-
-
-        else:
-            balance= balance - float(jd['cantidad'])
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance - float(jd['cantidad'])
-            aux_usuario.balance = balance
-
-
-
-            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
-                    aux_limite.save()
-            
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
-                    aux_limite.save()
-
-        aux_cuenta.save()
-        aux_usuario.save()
-
-        #se suma al contador de transacciones de las categorias
-        aux_categoria=categoria.objects.get(id=jd['clave_categoria'])
-        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
-        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
-        aux_categoria.save()
-
-        if (jd["clave_subcategoria"]!=""):
-            aux_subcategoria=subcategoria.objects.get(id=jd['clave_subcategoria'])
-            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
-            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
-            aux_subcategoria.save()
-
-
-        
-
-
-        return JsonResponse(datos)
-
     def put (self,request, id=0):
         pass
     
@@ -483,7 +371,9 @@ class TransaccionesView(View):
             datos={'message': "Transaccion no encontrada"}
         return JsonResponse(datos)
 
-class TransferenciasView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransferenciasView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -554,7 +444,9 @@ class TransferenciasView(View):
             datos={'message': "Transferencia no encontrado"}
         return JsonResponse(datos)
 
-class ObjetivosView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class ObjetivosView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -605,7 +497,9 @@ class ObjetivosView(View):
             datos={'message': "Objetivo no encontrado"}
         return JsonResponse(datos)
 
-class LimitesView(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class LimitesView(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -659,7 +553,9 @@ class LimitesView(View):
 
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas entre dos fechas y un usuario especifico
-class TransaccionesRango(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesRango(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -731,13 +627,16 @@ class TransaccionesRango(View):
             return JsonResponse(datos)
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas un dia especifico
-class TransaccionesDia(View):    
+
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesDia(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
     
-    @method_decorator(login_required, name='dispatch')
     def get(self,request, tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -791,7 +690,7 @@ class TransaccionesDia(View):
                         lista_final.append(elemento)
 
 
-                    datos={'message': "Exito", "Transacciones": lista_final}
+                    datos = {'message': 'Exito', "Transacciones": lista_final}
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -809,7 +708,9 @@ class TransaccionesDia(View):
 
         
 #Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
-class TransaccionesMes(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesMes(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -893,14 +794,10 @@ class TransaccionesMes(View):
             return JsonResponse(datos)
                     
 
-
-
-
-                        
-
-
 #Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
-class TransaccionesYear(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesYear(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -987,7 +884,9 @@ class TransaccionesYear(View):
                 
 
 #Clase que contiene el metodo get para obtener las transacciones realizadas la semnaa actual
-class TransaccionesSemana(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransaccionesSemana(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2034,8 +1933,9 @@ class TransaccionesSemana(View):
         
         
 
-
-class CorreoRecuperacion(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CorreoRecuperacion(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2080,7 +1980,12 @@ class ObtenerDivisa(View):
         return JsonResponse(datos)
     
 
-class FormatoReporte(View):    
+
+
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class FormatoReporte(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2141,7 +2046,9 @@ class FormatoReporte(View):
         
 #Clases para generar reportes
 
-class ReporteRango(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class ReporteRango(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2231,8 +2138,10 @@ class ReporteRango(View):
         else:
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
-    
-class ReporteDia(View):    
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])    
+class ReporteDia(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2324,8 +2233,10 @@ class ReporteDia(View):
         else:
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
-    
-class ReporteMes(View):    
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])    
+class ReporteMes(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2430,8 +2341,10 @@ class ReporteMes(View):
         else:
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
-                    
-class ReporteYear(View):    
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])                    
+class ReporteYear(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -2534,7 +2447,9 @@ class ReporteYear(View):
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
 
-class ReporteSemana(View):    
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class ReporteSemana(APIView):    
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
@@ -3600,7 +3515,9 @@ class ReporteSemana(View):
 
 
 #Clases para obtener los limites y objtivos de determinado usuario
-class LimitesUsuario(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class LimitesUsuario(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3639,7 +3556,9 @@ class LimitesUsuario(View):
         return JsonResponse(datos)
         
 #Clases para obtener los limites y objtivos de determinado usuario
-class ObjetivosUsuario(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class ObjetivosUsuario(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3679,7 +3598,9 @@ class ObjetivosUsuario(View):
         return JsonResponse(datos)
 
 #Clases para obtener las cuentas de un usuario especifico
-class CuentasUsuario(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CuentasUsuario(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3702,7 +3623,9 @@ class CuentasUsuario(View):
         return JsonResponse(datos)
     
 #Clases para obtener las categorias de un determinado usuario
-class CategoriasUsuario(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CategoriasUsuario(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3728,7 +3651,9 @@ class CategoriasUsuario(View):
         return JsonResponse(datos)
     
 #Clases para obtener las subcategorias de un determinado usuario
-class SubCategoriasUsuario(View):
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class SubCategoriasUsuario(APIView):
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3767,7 +3692,11 @@ class SubCategoriasUsuario(View):
            
         return JsonResponse(datos)
 
-class TransferenciasUsuario(View): #Se requiere login
+
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransferenciasUsuario(APIView): #Se requiere login
 
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
@@ -3832,44 +3761,225 @@ class Login(View):
         password = jd['contra']
         user = authenticate(request, username=username, password=password)
         if user is not None:
+            aux_usuario = usuario.objects.get(correo=jd['correo'])
             login(request, user)
             token, created = Token.objects.get_or_create(user=user)
-            datos={'message': "Inicio correcto", "token": token.key}
+            datos={'message': "Inicio correcto", "token": token.key, "correo": username, "nombre":aux_usuario.nombre, "divisa": aux_usuario.divisa, "id": aux_usuario.id}
             return JsonResponse(datos)
         else:
             datos={'message': "Inicio Incorrecto"}
             return JsonResponse(datos)
 
-class Inicio(View):
+    
+class Crear_Usuario(View):
 
-  
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post (self,request):
+        jd=json.loads(request.body)
+        
 
+        usuarios=list(usuario.objects.filter(correo=jd["correo"]).values())
+        if len(usuarios)>0:
+            datos={'message': "Error, ya existe un registro con ese correo"}
+            return JsonResponse(datos)
+        else:
+            #se crea el usuario
+            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
+            #Se crea el usuario para el login
+            user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
+
+            user.save()
+            datos={'message': "Exito"}
+            return JsonResponse(datos)
+
+class Crear_Transaccion(View):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs) -> HttpResponse:
+        return super().dispatch(request, *args, **kwargs)
+
+    def post (self,request):
+        jd=json.loads(request.body)
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+        transaccion.objects.create(clave_cuenta_id=jd["clave_cuenta"],
+                                   clave_categoria_id=jd["clave_categoria"],
+                                   clave_subcategoria_id=jd["clave_subcategoria"],
+                                   tipo=jd["tipo"],
+                                   cantidad=jd["cantidad"],
+                                   divisa=jd["divisa"],
+                                   fecha=parsed_date,
+                                   comentarios=jd["comentarios"])
+
+        datos={'message': "Exito"}
+
+        #Cambio de balances
+        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta'])
+
+        clave_usuario=aux_cuenta.clave_usuario_id
+
+        aux_usuario=usuario.objects.get(id=int(clave_usuario))
+
+
+        balance=float(aux_cuenta.balance)
+        # se resta o suma del balance segun sea el caso
+        if (jd['tipo']=="Ingreso"):
+            balance= balance + float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance + float(jd['cantidad'])
+            aux_usuario.balance = balance
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
+                    aux_objetivo.save()
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
+                    aux_objetivo.save()
+
+
+
+        else:
+            balance= balance - float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance - float(jd['cantidad'])
+            aux_usuario.balance = balance
+
+
+
+            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
+                    aux_limite.save()
+            
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
+                    aux_limite.save()
+
+        aux_cuenta.save()
+        aux_usuario.save()
+
+        #se suma al contador de transacciones de las categorias
+        aux_categoria=categoria.objects.get(id=jd['clave_categoria'])
+        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
+        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
+        aux_categoria.save()
+
+        if (jd["clave_subcategoria"]!=""):
+            aux_subcategoria=subcategoria.objects.get(id=jd['clave_subcategoria'])
+            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
+            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
+            aux_subcategoria.save()
+
+
+        
+
+
+        return JsonResponse(datos)
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class Obtener_Balance(APIView):
+     def get(self,request, id=0):
+        
+        
+
+        if (id>0):
+        
+            aux_usuario= usuario.objects.get(id=id)
+
+            datos={'message': "Exito", "balance": aux_usuario.balance}
+
+
+
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+                    
+#Clases para obtener las categorias de un determinado usuario
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CategoriasGastoUsuario(APIView):
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
     @method_decorator(login_required, name='dispatch')
-    def get(self,request):
-        return render(request, 'bienvenido.html')
+    def get(self,request, id=0, tipo=''):
+        if (id>0):
+            categorias=list(categoria.objects.filter(clave_usuario=id).filter(tipo='Gasto').values())
+            if len(categorias)>0:
+                
 
 
-class Logout(View):
+                datos={'message': "Exito", "Categorias": categorias}
+            else:
+                datos={'message': "Categorias no encontradas"}
 
-  
 
-    def post(self, request):
-        logout(request)
-        return redirect('login')
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
     
 
+#Clases para obtener las categorias de un determinado usuario
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class CategoriasIngresoUsuario(APIView):
 
-class RecuperarContra(View):
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
 
-  
-
-    def get(self,request):
-        return render(request, 'recuperar_contra.html')
-
-
-class Redirigir(View):
-
-  
+    
     @method_decorator(login_required, name='dispatch')
-    def get(self,request):
-        return redirect("inicio")
+    def get(self,request, id=0, tipo=''):
+        if (id>0):
+            categorias=list(categoria.objects.filter(clave_usuario=id).filter(tipo='Ingreso').values())
+            if len(categorias)>0:
+                
+
+
+                datos={'message': "Exito", "Categorias": categorias}
+            else:
+                datos={'message': "Categorias no encontradas"}
+
+
+        else:   
+            datos={'message': "Ingrese un id para poder buscar"}
+           
+        return JsonResponse(datos)
