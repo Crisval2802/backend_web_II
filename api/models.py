@@ -49,7 +49,7 @@ class transaccion(models.Model):
     tipo=models.CharField(max_length=10, default="Gasto", null=False)
     divisa=models.CharField(max_length=3)
     fecha=models.DateField()
-    comentarios=models.CharField(max_length=500)
+    comentarios=models.CharField(max_length=500, null=True)
 
 class transferencia(models.Model):
     clave_cuenta = models.ForeignKey(cuenta, null=False, blank=False, on_delete=models.DO_NOTHING)

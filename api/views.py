@@ -3795,6 +3795,8 @@ class Crear_Usuario(View):
             datos={'message': "Exito"}
             return JsonResponse(datos)
 
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])       
 class Crear_Transaccion(View):
 
     @method_decorator(csrf_exempt)
@@ -3804,19 +3806,39 @@ class Crear_Transaccion(View):
     def post (self,request):
         jd=json.loads(request.body)
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-        transaccion.objects.create(clave_cuenta_id=jd["clave_cuenta"],
-                                   clave_categoria_id=jd["clave_categoria"],
-                                   clave_subcategoria_id=jd["clave_subcategoria"],
-                                   tipo=jd["tipo"],
-                                   cantidad=jd["cantidad"],
-                                   divisa=jd["divisa"],
-                                   fecha=parsed_date,
-                                   comentarios=jd["comentarios"])
+
+        clave_categoria=''
+        clave_subcategoria=''
+
+
+
+        if (jd['tipo']=="Gasto"):
+            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
+                                    clave_categoria_id=jd["categoria_gasto"],
+                                    clave_subcategoria_id=jd["subcategoria_gasto"],
+                                    tipo=jd["tipo"],
+                                    cantidad=jd["cantidad"],
+                                    divisa=jd["divisa"],
+                                    fecha=parsed_date,
+                                    comentarios=jd["comentarios"])
+            clave_categoria=jd['categoria_gasto']
+            clave_subcategoria=jd['subcategoria_gasto']
+        else:
+            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
+                                    clave_categoria_id=jd["categoria_ingreso"],
+                                    clave_subcategoria_id=jd["subcategoria_ingreso"],
+                                    tipo=jd["tipo"],
+                                    cantidad=jd["cantidad"],
+                                    divisa=jd["divisa"],
+                                    fecha=parsed_date,
+                                    comentarios=jd["comentarios"])
+            clave_categoria=jd['categoria_ingreso']
+            clave_subcategoria=jd['subcategoria_ingreso']
 
         datos={'message': "Exito"}
 
         #Cambio de balances
-        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta'])
+        aux_cuenta=cuenta.objects.get(id=jd['cuenta'])
 
         clave_usuario=aux_cuenta.clave_usuario_id
 
@@ -3834,7 +3856,7 @@ class Crear_Transaccion(View):
             aux_usuario.balance = balance
             
             # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
             if len(objetivos)>0:
                 for elemento in objetivos:
                     clave= elemento.id
@@ -3865,7 +3887,7 @@ class Crear_Transaccion(View):
 
             parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
             # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=jd['clave_categoria']))
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
             if len(limites)>0:
                 for elemento in limites:
                     clave= elemento.id
@@ -3886,13 +3908,13 @@ class Crear_Transaccion(View):
         aux_usuario.save()
 
         #se suma al contador de transacciones de las categorias
-        aux_categoria=categoria.objects.get(id=jd['clave_categoria'])
+        aux_categoria=categoria.objects.get(id=clave_categoria)
         aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
         aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
         aux_categoria.save()
 
-        if (jd["clave_subcategoria"]!=""):
-            aux_subcategoria=subcategoria.objects.get(id=jd['clave_subcategoria'])
+        if (clave_subcategoria!=''):
+            aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
             aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
             aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
             aux_subcategoria.save()
