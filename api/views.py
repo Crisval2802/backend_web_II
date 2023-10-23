@@ -1933,23 +1933,23 @@ class TransaccionesSemana(APIView):
         
         
 
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-class CorreoRecuperacion(APIView):    
+
+class CorreoRecuperacion(APIView):  
+      
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
     def post(self,request):
-
-        correos=list(usuario.objects.filter(correo=request.POST.get('txt_email')).values())
+        jd=json.loads(request.body)
+        correos=list(usuario.objects.filter(correo=jd['correo']).values())
         if len(correos)>0:
             for correo in correos:
 
                 asunto = "Administrador de Ingresos y Gastos: Recuperar Contraseña"
                 mensaje = "Se ha realizado una solicitud para recuperar la contraseña vinculada a este correo\nTu contraseña es: " + correo['contra']
                 email_desde = settings.EMAIL_HOST_USER
-                email_para = request.POST.get('txt_email')
+                email_para = jd['correo']
                 msg=EmailMultiAlternatives(asunto, mensaje, email_desde, [email_para])
                 msg.send()
                 datos={'message': "correo enviado"}
@@ -3787,7 +3787,7 @@ class Crear_Usuario(View):
             return JsonResponse(datos)
         else:
             #se crea el usuario
-            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
+            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=0)
             #Se crea el usuario para el login
             user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
 
