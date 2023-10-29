@@ -82,8 +82,8 @@ class UsuarioView(APIView):
 
             
             if(jd["divisa"] !=""):
-                de_divisa=aux.divisa
-                a_divisa=jd["divisa"]
+                de_divisa=aux.divisa.lower()
+                a_divisa=jd["divisa"].lower()
                 aux.divisa=jd["divisa"]
 
                 url_api = "https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/" + de_divisa + "/" + a_divisa + ".json"
@@ -124,7 +124,7 @@ class UsuarioView(APIView):
             
             
             aux.save()
-            datos={'message': "Exito", "Valor": valor_divisa}
+            datos={'message': "Exito"}
         else:
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
@@ -187,7 +187,7 @@ class CuentasView(APIView):
             aux.save()
             datos={'message': "Exito"}
         else:
-            datos={'message': "Usuario no encontrado"}
+            datos={'message': "Cuenta no encontrada"}
         return JsonResponse(datos)
     
     @method_decorator(staff_member_required(login_url='login'), name='dispatch') # Decorador para que solo las cuentas de superusuario puedan accedera esta api
@@ -409,7 +409,7 @@ class TransferenciasView(APIView):
                                    fecha=parsed_date,
                                    comentarios=jd["comentarios"])
         
-        transferencia.objects.create(clave_cuenta_id=jd["clave_cuenta_2"],
+        transferencia.objects.create(clave_cuenta_id=jd["clave_cuenta2"],
                                    tipo="abono",
                                    cantidad=jd["cantidad"],
                                    divisa=jd["divisa"],
@@ -423,7 +423,7 @@ class TransferenciasView(APIView):
         aux_cuenta.balance= aux_cuenta.balance - jd['cantidad']
         aux_cuenta.save()
 
-        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta_2'])
+        aux_cuenta=cuenta.objects.get(id=jd['clave_cuenta2'])
         aux_cuenta.balance= aux_cuenta.balance + jd['cantidad']
         aux_cuenta.save()
 
@@ -3787,7 +3787,7 @@ class Crear_Usuario(View):
             return JsonResponse(datos)
         else:
             #se crea el usuario
-            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=0)
+            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
             #Se crea el usuario para el login
             user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
 
@@ -3930,20 +3930,13 @@ class Crear_Transaccion(View):
 class Obtener_Balance(APIView):
      def get(self,request, id=0):
         
-        
-
         if (id>0):
         
             aux_usuario= usuario.objects.get(id=id)
 
             datos={'message': "Exito", "balance": aux_usuario.balance}
-
-
-
                     
             return JsonResponse(datos)
-
-
             
         else:
             datos={'message': "Ingrese un id para poder buscar"}
@@ -4005,3 +3998,53 @@ class CategoriasIngresoUsuario(APIView):
             datos={'message': "Ingrese un id para poder buscar"}
            
         return JsonResponse(datos)
+    
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class Obtener_Informacion_Usuario(APIView):
+     def get(self,request, id=0):
+        
+        if (id>0):
+        
+            aux_usuario= usuario.objects.get(id=id)
+
+            datos={'message': "Exito", 
+                   "balance": aux_usuario.balance, 
+                   "nombre": aux_usuario.nombre,
+                   "correo": aux_usuario.correo,
+                   "divisa": aux_usuario.divisa}
+                    
+            return JsonResponse(datos)
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
+            return JsonResponse(datos)
+
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class TransferenciasCuenta(APIView): #Se requiere login
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+
+    def get(self,request, id=0):
+        if (id>0):
+
+            transferencias=list(transferencia.objects.filter(clave_cuenta=id).values())
+                        
+
+            if len(transferencias)>0:
+                   
+                datos={'message': "Exito", "Transferencias": transferencias}
+            else:
+                datos={'message': "No se encontraron transferencias"}
+            return JsonResponse(datos)
+        
+        else:
+            datos={'message': "Ingrese un Id para poder buscar"}
+            return JsonResponse(datos)
+ 

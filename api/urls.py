@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Transaccion, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Transaccion, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, Obtener_Informacion_Usuario, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasCuenta, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -24,6 +24,7 @@ urlpatterns=[
     path('transferencias/', TransferenciasView.as_view(), name='transferencias_list'),
     path('transferencias/<int:id>', TransferenciasView.as_view(), name='transferencias_process'),
     path('transferencias/usuario/<int:id>', TransferenciasUsuario.as_view(), name='transferencias_usuario'),
+    path('transferencias/cuenta/<int:id>', TransferenciasCuenta.as_view(), name='transferencias_cuenta'),
 
     path('objetivos/', ObjetivosView.as_view(), name='objetivos_list'),
     path('objetivos/<int:id>', ObjetivosView.as_view(), name='objetivos_process'),
@@ -61,4 +62,5 @@ urlpatterns=[
     path('crear/transaccion/', Crear_Transaccion.as_view(), name='transaccion_create'),
 
     path('obtener/balance/<int:id>', Obtener_Balance.as_view(), name='Obtener_balance'),
+    path('obtener/informacion/usuario/<int:id>', Obtener_Informacion_Usuario.as_view(), name='Obtener_Informacion_Usuario'),
 ]
