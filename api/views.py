@@ -3790,8 +3790,12 @@ class Crear_Usuario(View):
             usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
             #Se crea el usuario para el login
             user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
-
             user.save()
+
+            #se crea la cuenta
+            aux_usuario=usuario.objects.get(correo=jd['correo'])
+            cuenta.objects.create(clave_usuario_id=aux_usuario.id,nombre=jd["cuenta"], balance=jd["balance"], divisa=jd["divisa"])
+            
             datos={'message': "Exito"}
             return JsonResponse(datos)
 
