@@ -115,6 +115,40 @@ class UsuarioView(APIView):
                             aux_cuenta.divisa=jd["divisa"]
 
                             aux_cuenta.save()
+
+                     #se actualiza el total de dinero de las categorias del usuario
+                    categorias=list(categoria.objects.filter(clave_usuario=aux.id).values())
+
+                    if len(categorias)>0:
+
+                        for elemento in categorias:
+                            id_categoria = elemento['id']
+                            aux_categoria=categoria.objects.get(id=id_categoria)
+                            
+                            balance= float(aux_categoria.total_dinero)
+                            balance = balance * float(valor_divisa)
+
+                            aux_categoria.total_dinero=round(balance,2)
+
+                            aux_categoria.save()
+
+                             #se actualiza el total de dinero de las subcategorias del usuario
+                            subcategorias=list(subcategoria.objects.filter(clave_categoria=aux_categoria.id).values())
+
+                            if len(subcategorias)>0:
+
+                                for elemento in subcategorias:
+                                    id_subcategoria = elemento['id']
+                                    aux_subcategoria=subcategoria.objects.get(id=id_subcategoria)
+                                    
+                                    balance= float(aux_subcategoria.total_dinero)
+                                    balance = balance * float(valor_divisa)
+
+                                    aux_subcategoria.total_dinero=round(balance,2)
+
+                                    aux_subcategoria.save()
+
+                    
              
                         
                                       
@@ -3750,9 +3784,6 @@ class Login(View):
     def dispatch(self, request, *args, **kwargs) -> HttpResponse:
         return super().dispatch(request, *args, **kwargs)
 
-    def get(self,request):
-        return render(request, 'login.html')
-    
     def post(self, request):
         jd=json.loads(request.body)
         # username = request.POST.get('correo')
