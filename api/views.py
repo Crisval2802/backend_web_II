@@ -595,7 +595,7 @@ class TransaccionesRango(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         if (id>0):
             
@@ -741,7 +741,6 @@ class TransaccionesDia(APIView):
                     
 
         
-#Clase que contiene el metodo get para obtener las transacciones realizadas un Mes especifico
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 class TransaccionesMes(APIView):    
@@ -749,7 +748,7 @@ class TransaccionesMes(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
     
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -835,7 +834,7 @@ class TransaccionesYear(APIView):
     @method_decorator(csrf_exempt)
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -925,7 +924,7 @@ class TransaccionesSemana(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         aux2=date.today()
 
@@ -1951,9 +1950,9 @@ class TransaccionesSemana(APIView):
                     datos={'message': "Exito", "Inicio": inicio, "Final": final,"Transacciones": lista_final}
                     
                 else:
-                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+                    datos={'message': "No se encontraron cuentas", "Inicio": inicio, "Final": final}
             else:
-                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                datos={'message': "No se encontraron cuentas", "Inicio": inicio, "Final": final}
                     
             return JsonResponse(datos)
 
@@ -2087,7 +2086,7 @@ class ReporteRango(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         if (id>0):
 
@@ -2180,7 +2179,7 @@ class ReporteDia(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request, tipo="",clave_categoria=0, fecha="",fecha2="", id=0):
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
 
@@ -2275,7 +2274,7 @@ class ReporteMes(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -2383,7 +2382,7 @@ class ReporteYear(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
@@ -2488,7 +2487,7 @@ class ReporteSemana(APIView):
     def dispatch(self, request, *args, **kwargs):
         return super().dispatch(request, *args, **kwargs)
 
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request,tipo="",clave_categoria=0, id=0):
         aux2=date.today()
 
