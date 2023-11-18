@@ -16,10 +16,7 @@ from django.template.loader import get_template
 from xhtml2pdf import pisa
 
 
-from typing import Any
-from django import http
 from django.http.response import JsonResponse 
-from django.shortcuts import redirect, render
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from .models import usuario, cuenta, categoria, subcategoria, transaccion, transferencia, objetivo, limite
@@ -31,10 +28,11 @@ from django.contrib.admin.views.decorators import staff_member_required
 
 
 from django.conf import settings
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.contrib.auth import authenticate, login, logout
-from django.contrib import messages
-from django.views.decorators.csrf import csrf_protect
+from django.core.mail import  EmailMultiAlternatives
+from django.contrib.auth import authenticate
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 #Clases para aplicar los metodos get,post,put y delete a cada uno de los 8 modelos de la BD
 
 @authentication_classes([TokenAuthentication])
@@ -69,18 +67,13 @@ class UsuarioView(APIView):
         usuarios=list(usuario.objects.filter(id=id).values())
         if len(usuarios)>0:
             aux=usuario.objects.get(id=id)
-
             if(jd["nombre"] !=""):
                 aux.nombre=jd["nombre"]
-            
             if(jd["contra"] !=""):
                 aux.contra=jd["contra"]
                 aux_user = User.objects.get(username=aux.correo)
                 aux_user.set_password(jd['contra'])
                 aux_user.save()
-                
-
-            
             if(jd["divisa"] !=""):
                 de_divisa=aux.divisa.lower()
                 a_divisa=jd["divisa"].lower()
@@ -116,7 +109,7 @@ class UsuarioView(APIView):
 
                             aux_cuenta.save()
 
-                     #se actualiza el total de dinero de las categorias del usuario
+                    #se actualiza el total de dinero de las categorias del usuario
                     categorias=list(categoria.objects.filter(clave_usuario=aux.id).values())
 
                     if len(categorias)>0:
@@ -147,18 +140,39 @@ class UsuarioView(APIView):
                                     aux_subcategoria.total_dinero=round(balance,2)
 
                                     aux_subcategoria.save()
+                    parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+                    #se actualiza el total de dinero de los limites y objetivos del usuario
+                    limites=list(limite.objects.filter(clave_usuario=aux.id).filter(fecha_limite__gte=parsed_date).values())
+                    if len(limites)>0:
+                        for elemento in limites:
+                            id_limite = elemento['id']
+                            aux_limite=limite.objects.get(id=id_limite)
+                            aux_valor= float(aux_limite.asignado)
+                            aux_valor = aux_valor * float(valor_divisa)
+                            aux_limite.asignado=round(aux_valor,2)
+                            aux_valor= float(aux_limite.total)
+                            aux_valor = aux_valor * float(valor_divisa)
+                            aux_limite.total=round(aux_valor,2)
+                            aux_limite.divisa=a_divisa.upper()
+                            aux_limite.save()
+                    #se actualiza el total de dinero de las categorias del usuario
+                    objetivos=list(objetivo.objects.filter(clave_usuario=aux.id).filter(fecha_limite__gte=parsed_date).values())
+                    if len(objetivos)>0:
+                        for elemento in objetivos:
+                            id_objetivo = elemento['id']
+                            aux_objetivo=objetivo.objects.get(id=id_objetivo)
+                            aux_valor= float(aux_objetivo.asignado)
+                            aux_valor = aux_valor * float(valor_divisa)
+                            aux_objetivo.asignado=round(aux_valor,2)
+                            aux_valor= float(aux_objetivo.total)
+                            aux_valor = aux_valor * float(valor_divisa)
+                            aux_objetivo.total=round(aux_valor,2)
+                            aux_objetivo.divisa=a_divisa.upper()
+                            aux_objetivo.save()
 
-                    
-             
-                        
-                                      
-
-            
-            
-            
-            
             aux.save()
-            datos={'message': "Exito"}
+            datos={'message': limites}
+
         else:
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
@@ -371,6 +385,7 @@ class TransaccionesView(APIView):
         return super().dispatch(request, *args, **kwargs)
 
     
+
     @method_decorator(staff_member_required(login_url='login'), name='dispatch')
     def get(self,request, id=0):
         
@@ -391,6 +406,130 @@ class TransaccionesView(APIView):
             else:
                 datos={'message': "transacciones no encontradas"}
             return JsonResponse(datos)
+        
+
+    def post (self,request):
+        jd=json.loads(request.body)
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+
+        clave_categoria=''
+        clave_subcategoria=''
+
+
+
+        if (jd['tipo']=="Gasto"):
+            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
+                                    clave_categoria_id=jd["categoria_gasto"],
+                                    clave_subcategoria_id=jd["subcategoria_gasto"],
+                                    tipo=jd["tipo"],
+                                    cantidad=jd["cantidad"],
+                                    divisa=jd["divisa"],
+                                    fecha=parsed_date,
+                                    comentarios=jd["comentarios"])
+            clave_categoria=jd['categoria_gasto']
+            clave_subcategoria=jd['subcategoria_gasto']
+        else:
+            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
+                                    clave_categoria_id=jd["categoria_ingreso"],
+                                    clave_subcategoria_id=jd["subcategoria_ingreso"],
+                                    tipo=jd["tipo"],
+                                    cantidad=jd["cantidad"],
+                                    divisa=jd["divisa"],
+                                    fecha=parsed_date,
+                                    comentarios=jd["comentarios"])
+            clave_categoria=jd['categoria_ingreso']
+            clave_subcategoria=jd['subcategoria_ingreso']
+
+        datos={'message': "Exito"}
+
+        #Cambio de balances
+        aux_cuenta=cuenta.objects.get(id=jd['cuenta'])
+
+        clave_usuario=aux_cuenta.clave_usuario_id
+
+        aux_usuario=usuario.objects.get(id=int(clave_usuario))
+
+
+        balance=float(aux_cuenta.balance)
+        # se resta o suma del balance segun sea el caso
+        if (jd['tipo']=="Ingreso"):
+            balance= balance + float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance + float(jd['cantidad'])
+            aux_usuario.balance = balance
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total = aux_objetivo.total + jd['cantidad']
+                    aux_objetivo.save()
+            
+            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
+            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(objetivos)>0:
+                for elemento in objetivos:
+                    clave= elemento.id
+                    aux_objetivo=objetivo.objects.get(id=clave)
+                    aux_objetivo.total = aux_objetivo.total + jd['cantidad']
+                    aux_objetivo.save()
+
+
+
+        else:
+            balance= balance - float(jd['cantidad'])
+            aux_cuenta.balance=balance
+
+            balance = float(aux_usuario.balance)
+            balance = balance - float(jd['cantidad'])
+            aux_usuario.balance = balance
+
+
+
+            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total = aux_limite.total + jd['cantidad']
+                    aux_limite.save()
+            
+            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
+            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+            if len(limites)>0:
+                for elemento in limites:
+                    clave= elemento.id
+                    aux_limite=limite.objects.get(id=clave)
+                    aux_limite.total = aux_limite.total + jd['cantidad']
+                    aux_limite.save()
+
+        aux_cuenta.save()
+        aux_usuario.save()
+
+        #se suma al contador de transacciones de las categorias
+        aux_categoria=categoria.objects.get(id=clave_categoria)
+        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
+        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
+        aux_categoria.save()
+
+        if (clave_subcategoria!=''):
+            aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
+            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
+            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
+            aux_subcategoria.save()
+
+
+        
+
+
+        return JsonResponse(datos)
+
 
     def put (self,request, id=0):
         pass
@@ -509,11 +648,19 @@ class ObjetivosView(APIView):
     def post (self,request):
         jd=json.loads(request.body)
         
-        objetivo.objects.create(clave_usuario_id=jd["clave_usuario"],
-                                total_ingresado=jd["total_ingresado"],
-                                objetivo_asignado=jd["objetivo_asignado"],
-                                clave_categoria_id=jd["clave_categoria"],
-                                fecha_limite=jd["fecha_limite"])
+        if jd["categoria"]=="Any":
+            objetivo.objects.create(clave_usuario_id=jd["clave_usuario"],
+                                total=0,
+                                asignado=jd["asignado"],
+                                fecha_limite=jd["fecha_limite"],
+                                divisa=jd["divisa"])
+        else:
+            objetivo.objects.create(clave_usuario_id=jd["clave_usuario"],
+                                total=0,
+                                asignado=jd["asignado"],
+                                clave_categoria_id=jd["categoria"],
+                                fecha_limite=jd["fecha_limite"],
+                                divisa=jd["divisa"])
 
         datos={'message': "Exito"}
         return JsonResponse(datos)
@@ -562,11 +709,19 @@ class LimitesView(APIView):
     def post (self,request):
         jd=json.loads(request.body)
         
-        limite.objects.create(clave_usuario_id=jd["clave_usuario"],
-                                total_gastado=jd["total_ingresado"],
-                                limite_asignado=jd["objetivo_asignado"],
-                                clave_categoria_id=jd["clave_categoria"],
-                                fecha_limite=jd["fecha_limite"])
+        if jd["categoria"]=="Any":
+            limite.objects.create(clave_usuario_id=jd["clave_usuario"],
+                                total=0,
+                                asignado=jd["asignado"],
+                                fecha_limite=jd["fecha_limite"],
+                                divisa=jd["divisa"])
+        else:
+            limite.objects.create(clave_usuario_id=jd["clave_usuario"],
+                                total=0,
+                                asignado=jd["asignado"],
+                                clave_categoria_id=jd["categoria"],
+                                fecha_limite=jd["fecha_limite"],
+                                divisa=jd["divisa"])
 
         datos={'message': "Exito"}
         return JsonResponse(datos)
@@ -1963,9 +2118,6 @@ class TransaccionesSemana(APIView):
             return JsonResponse(datos)
         
         
-        
-        
-
 
 class CorreoRecuperacion(APIView):  
       
@@ -1975,106 +2127,25 @@ class CorreoRecuperacion(APIView):
 
     def post(self,request):
         jd=json.loads(request.body)
-        correos=list(usuario.objects.filter(correo=jd['correo']).values())
-        if len(correos)>0:
-            for correo in correos:
-
-                asunto = "Administrador de Ingresos y Gastos: Recuperar Contraseña"
-                mensaje = "Se ha realizado una solicitud para recuperar la contraseña vinculada a este correo\nTu contraseña es: " + correo['contra']
-                email_desde = settings.EMAIL_HOST_USER
-                email_para = jd['correo']
-                msg=EmailMultiAlternatives(asunto, mensaje, email_desde, [email_para])
-                msg.send()
-                datos={'message': "correo enviado"}
-                return JsonResponse(datos)
+        user = User.objects.get(email=jd["correo"])
+        if user:
+            token = default_token_generator.make_token(user)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            reset_url = f"http://127.0.0.1:8000/api/reset/{uid}/{token}/"
+            
+            subject = 'Recuperación de contraseña'
+            message = f'Para restablecer su contraseña, haga clic en el siguiente enlace: {reset_url}'
+            from_email = settings.EMAIL_HOST_USER
+            to_email = jd['correo']
+            
+            msg=EmailMultiAlternatives(subject, message, from_email, [to_email])
+            msg.send()
+            datos={'message': "Correo enviado exitosamente"}
+            return JsonResponse(datos)
         else:
             datos={'message': "No se encontro un usuario con ese correo"}
             return JsonResponse(datos)
         
-
-
-
-class ObtenerDivisa(View):    
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-    @method_decorator(login_required, name='dispatch')
-    def get(self,request, de_divisa="", a_divisa=""):
-        url_api = "https://cdn.jsdelivr.net/gh/fawazahmed0/currency-api@1/latest/currencies/" + de_divisa + "/" + a_divisa + ".json"
-        response = requests.get(url_api)
-        if response.status_code ==200:
-            aux = response.json()
-            #valor_divisa=[a_divisa]
-            datos = {'message':"Exito", "divisa": aux}
-        else:
-            
-            datos={'message': "Error al consumir la API"}
-
-        return JsonResponse(datos)
-    
-
-
-
-
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])
-class FormatoReporte(APIView):    
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs):
-        return super().dispatch(request, *args, **kwargs)
-
-    @method_decorator(login_required, name='dispatch')
-    def get(self,request, id=""):
-
-
-        transacciones=list(transaccion.objects.values())
-
-
-
-
-        if len(transacciones)>0:
-            lista_final=[]
-            #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
-            for elemento in transacciones:
-                #para obtener las cuentas
-                aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
-                for aux_cuenta in aux_cuentas:
-                    elemento['clave_cuenta_id']=aux_cuenta['nombre']
-                #para obtener las categorias
-                aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
-                for aux_categoria in aux_categorias:
-                    elemento['clave_categoria_id']=aux_categoria['nombre']
-                #para obtener las subcategorias
-                aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
-                if len(aux_subcategorias)>0:
-                    for aux_subcategoria in aux_subcategorias:
-                        elemento['clave_subcategoria_id']=aux_subcategoria['nombre']
-                else:
-                    elemento['clave_subcategoria_id']="**Ninguna**"
-
-                lista_final.append(elemento)
-
-            datos={"Transacciones": lista_final,"fecha": date.today(), "usuario":"Cristian Armando Valenzuela Acosta"}
-        else:
-            datos={'message': "transacciones no encontradas"}
-
-
-        #Proceso para convertir el html a pdf
-        template = get_template('reporte.html')
-        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-        
-        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
-
-        # Convierte el HTML a PDF y escribe en la respuesta
-        pisa_status = pisa.CreatePDF(html, dest=response)
-        
-        # Si la conversión tuvo éxito, devuelve la respuesta
-        if pisa_status.err:
-            return HttpResponse('Error al generar el PDF')
-        
-        return response
     
         
 #Clases para generar reportes
@@ -3557,10 +3628,10 @@ class LimitesUsuario(APIView):
         return super().dispatch(request, *args, **kwargs)
 
     
-    @method_decorator(login_required, name='dispatch')
+
     def get(self,request, id=0):
         if (id>0):
-            limites=list(limite.objects.filter(clave_usuario=id).values())
+            limites=list(limite.objects.filter(clave_usuario=id).values().order_by("-fecha_limite"))
             if len(limites)>0:
                 lista_final=[]
                 #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
@@ -3578,7 +3649,7 @@ class LimitesUsuario(APIView):
 
 
 
-                datos={'message': "Exito", "limites": lista_final}
+                datos={'message': "Exito", "datos": lista_final}
             else:
                 datos={'message': "limites no encontrados"}
 
@@ -3598,10 +3669,9 @@ class ObjetivosUsuario(APIView):
         return super().dispatch(request, *args, **kwargs)
 
     
-    @method_decorator(login_required, name='dispatch')
     def get(self,request, id=0):
         if (id>0):
-            objetivos=list(objetivo.objects.filter(clave_usuario=id).values())
+            objetivos=list(objetivo.objects.filter(clave_usuario=id).values().order_by("-fecha_limite"))
             if len(objetivos)>0:
                 lista_final=[]
                 #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
@@ -3620,7 +3690,7 @@ class ObjetivosUsuario(APIView):
 
 
 
-                datos={'message': "Exito", "limites": lista_final}
+                datos={'message': "Exito", "datos": lista_final}
             else:
                 datos={'message': "limites no encontrados"}
 
@@ -3725,8 +3795,6 @@ class SubCategoriasUsuario(APIView):
            
         return JsonResponse(datos)
 
-
-
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])
 class TransferenciasUsuario(APIView): #Se requiere login
@@ -3776,7 +3844,6 @@ class TransferenciasUsuario(APIView): #Se requiere login
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
 
-
 class Login(View):
 
     @method_decorator(csrf_exempt)
@@ -3792,14 +3859,12 @@ class Login(View):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             aux_usuario = usuario.objects.get(correo=jd['correo'])
-            login(request, user)
             token, created = Token.objects.get_or_create(user=user)
             datos={'message': "Inicio correcto", "token": token.key, "correo": username, "nombre":aux_usuario.nombre, "divisa": aux_usuario.divisa, "id": aux_usuario.id}
             return JsonResponse(datos)
         else:
             datos={'message': "Inicio Incorrecto"}
             return JsonResponse(datos)
-
     
 class Crear_Usuario(View):
 
@@ -3817,7 +3882,7 @@ class Crear_Usuario(View):
             return JsonResponse(datos)
         else:
             #se crea el usuario
-            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], contra=jd["contra"], divisa=jd["divisa"], balance=jd["balance"])
+            usuario.objects.create(nombre=jd["nombre"], correo=jd["correo"], divisa=jd["divisa"], balance=jd["balance"])
             #Se crea el usuario para el login
             user = User.objects.create_user(jd["correo"], jd["correo"], jd["contra"])
             user.save()
@@ -3828,136 +3893,6 @@ class Crear_Usuario(View):
             
             datos={'message': "Exito"}
             return JsonResponse(datos)
-
-@authentication_classes([TokenAuthentication])
-@permission_classes([IsAuthenticated])       
-class Crear_Transaccion(View):
-
-    @method_decorator(csrf_exempt)
-    def dispatch(self, request, *args, **kwargs) -> HttpResponse:
-        return super().dispatch(request, *args, **kwargs)
-
-    def post (self,request):
-        jd=json.loads(request.body)
-        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-
-        clave_categoria=''
-        clave_subcategoria=''
-
-
-
-        if (jd['tipo']=="Gasto"):
-            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
-                                    clave_categoria_id=jd["categoria_gasto"],
-                                    clave_subcategoria_id=jd["subcategoria_gasto"],
-                                    tipo=jd["tipo"],
-                                    cantidad=jd["cantidad"],
-                                    divisa=jd["divisa"],
-                                    fecha=parsed_date,
-                                    comentarios=jd["comentarios"])
-            clave_categoria=jd['categoria_gasto']
-            clave_subcategoria=jd['subcategoria_gasto']
-        else:
-            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
-                                    clave_categoria_id=jd["categoria_ingreso"],
-                                    clave_subcategoria_id=jd["subcategoria_ingreso"],
-                                    tipo=jd["tipo"],
-                                    cantidad=jd["cantidad"],
-                                    divisa=jd["divisa"],
-                                    fecha=parsed_date,
-                                    comentarios=jd["comentarios"])
-            clave_categoria=jd['categoria_ingreso']
-            clave_subcategoria=jd['subcategoria_ingreso']
-
-        datos={'message': "Exito"}
-
-        #Cambio de balances
-        aux_cuenta=cuenta.objects.get(id=jd['cuenta'])
-
-        clave_usuario=aux_cuenta.clave_usuario_id
-
-        aux_usuario=usuario.objects.get(id=int(clave_usuario))
-
-
-        balance=float(aux_cuenta.balance)
-        # se resta o suma del balance segun sea el caso
-        if (jd['tipo']=="Ingreso"):
-            balance= balance + float(jd['cantidad'])
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance + float(jd['cantidad'])
-            aux_usuario.balance = balance
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
-                    aux_objetivo.save()
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total_ingresado = aux_objetivo.total_ingresado + jd['cantidad']
-                    aux_objetivo.save()
-
-
-
-        else:
-            balance= balance - float(jd['cantidad'])
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance - float(jd['cantidad'])
-            aux_usuario.balance = balance
-
-
-
-            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
-                    aux_limite.save()
-            
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total_gastado = aux_limite.total_gastado + jd['cantidad']
-                    aux_limite.save()
-
-        aux_cuenta.save()
-        aux_usuario.save()
-
-        #se suma al contador de transacciones de las categorias
-        aux_categoria=categoria.objects.get(id=clave_categoria)
-        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
-        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
-        aux_categoria.save()
-
-        if (clave_subcategoria!=''):
-            aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
-            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
-            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
-            aux_subcategoria.save()
-
-
-        
-
-
-        return JsonResponse(datos)
 
 @authentication_classes([TokenAuthentication])
 @permission_classes([IsAuthenticated])

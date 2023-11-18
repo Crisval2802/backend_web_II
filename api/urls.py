@@ -1,5 +1,8 @@
-from django.urls import path
-from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Transaccion, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, Obtener_Informacion_Usuario, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasCuenta, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ObtenerDivisa, FormatoReporte, ReporteRango, ReporteDia
+from django.urls import path, re_path
+from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, Obtener_Informacion_Usuario, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasCuenta, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ReporteRango, ReporteDia
+from django.contrib.auth.views import PasswordResetConfirmView, PasswordResetCompleteView
+
+
 urlpatterns=[
     path('usuarios/', UsuarioView.as_view(), name='usuarios_list'),
     path('usuarios/<int:id>', UsuarioView.as_view(), name='usuarios_process'),
@@ -41,26 +44,22 @@ urlpatterns=[
     path('transacciones/semana/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
 
     path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion"),
-    path('obtenerdivisa/<str:de_divisa>/<str:a_divisa>', ObtenerDivisa.as_view(), name="ObtenerDivisa"),
 
-
-    path('reporte', FormatoReporte.as_view(), name="FormatoReporte"),
     path('reporte/rango/<str:tipo>/<int:clave_categoria>/<str:fecha>/<str:fecha2>/<int:id>', ReporteRango.as_view(), name='reporte_rango'),
     path('reporte/dia/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteDia.as_view(), name='reporte_dia'),
     path('reporte/mes/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteMes.as_view(), name='reporte_mes'),
     path('reporte/year/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteYear.as_view(), name='reporte_year'),
     path('reporte/semana/<str:tipo>/<int:clave_categoria>/<int:id>', ReporteSemana.as_view(), name='reporte_semana'),
 
-
-
-
     path('login', Login.as_view(), name='login'),
 
-
-
     path('crear/usuarios/', Crear_Usuario.as_view(), name='usuarios_create'),
-    path('crear/transaccion/', Crear_Transaccion.as_view(), name='transaccion_create'),
-
     path('obtener/balance/<int:id>', Obtener_Balance.as_view(), name='Obtener_balance'),
     path('obtener/informacion/usuario/<int:id>', Obtener_Informacion_Usuario.as_view(), name='Obtener_Informacion_Usuario'),
+
+    re_path(r'^reset/(?P<uidb64>[0-9A-za-z_\-]+)/(?P<token>.+)/$', PasswordResetConfirmView.as_view(template_name='recuperar_contra/recuperar_contra_confirm.html')),
+    path('reset/done',PasswordResetCompleteView.as_view(template_name='recuperar_contra/recuperar_contra_complete.html'), name = 'password_reset_complete'),
+
+
+
 ]

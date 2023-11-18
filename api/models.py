@@ -15,7 +15,6 @@ def create_auth_token(sender, instance=None, created=False, **kwargs):
 class usuario(models.Model):
     nombre=models.CharField(max_length=200)
     correo=models.CharField(max_length=200)
-    contra=models.CharField(max_length=200)
     divisa=models.CharField(max_length=3)
     balance=models.FloatField()
 
@@ -62,16 +61,17 @@ class transferencia(models.Model):
 
 class objetivo(models.Model):
     clave_usuario = models.ForeignKey(usuario, null=False, blank=False, on_delete=models.DO_NOTHING)
-    total_ingresado=models.FloatField()
-    objetivo_asignado=models.FloatField()
+    total=models.FloatField()
+    asignado=models.FloatField()
     clave_categoria = models.ForeignKey(categoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     fecha_limite=models.DateField()
-
+    divisa=models.CharField(max_length=3, default="mxn")
+    
 class limite(models.Model):
     clave_usuario = models.ForeignKey(usuario, null=False, blank=False, on_delete=models.DO_NOTHING)
-    total_gastado=models.FloatField()
-    limite_asignado=models.FloatField()
+    total=models.FloatField()
+    asignado=models.FloatField()
     clave_categoria = models.ForeignKey(categoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     fecha_limite=models.DateField()
-
+    divisa=models.CharField(max_length=3, default="mxn")
 
