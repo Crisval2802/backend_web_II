@@ -1,5 +1,5 @@
 from django.urls import path, re_path
-from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, Obtener_Informacion_Usuario, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasCuenta, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ReporteRango, ReporteDia
+from .views import CategoriasGastoUsuario, CategoriasIngresoUsuario, CategoriasUsuario, Crear_Usuario, CuentasUsuario, Login,  Obtener_Balance, Obtener_Informacion_Usuario, PagosCuotas, ReporteMes, ReporteSemana, ReporteYear, SubCategoriasUsuario, TransferenciasCuenta, TransferenciasUsuario, UsuarioView, CuentasView, CategoriasView, SubCategoriasView, TransaccionesView, TransferenciasView, ObjetivosView, LimitesView, TransaccionesRango, TransaccionesDia, TransaccionesMes, TransaccionesYear, TransaccionesSemana, CorreoRecuperacion, LimitesUsuario, ObjetivosUsuario, ReporteRango, ReporteDia
 from django.contrib.auth.views import PasswordResetConfirmView, PasswordResetCompleteView
 
 
@@ -42,6 +42,8 @@ urlpatterns=[
     path('transacciones/mes/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesMes.as_view(), name='transacciones_mes'),
     path('transacciones/year/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesYear.as_view(), name='transacciones_year'),
     path('transacciones/semana/<str:tipo>/<int:clave_categoria>/<int:id>', TransaccionesSemana.as_view(), name='transacciones_semana'),
+
+    path('pagos_cuotas/<int:id>', PagosCuotas.as_view(), name='pagos_cuotas'),
 
     path('correo', CorreoRecuperacion.as_view(), name="CorreoRecuperacion"),
 

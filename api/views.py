@@ -19,9 +19,9 @@ from xhtml2pdf import pisa
 from django.http.response import JsonResponse 
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from .models import usuario, cuenta, categoria, subcategoria, transaccion, transferencia, objetivo, limite
+from .models import usuario, cuenta, categoria, subcategoria, transaccion, transferencia, objetivo, limite, cuotas
 from django.utils.decorators import method_decorator
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
@@ -416,8 +416,10 @@ class TransaccionesView(APIView):
         clave_subcategoria=''
 
 
-
-
+        if request.POST.get('cantidad_pagos'):
+            a_cuotas="SI"
+        else:
+            a_cuotas="NO"
 
         if (request.POST.get('tipo')=="Gasto"):
             transaccion.objects.create(clave_cuenta_id=request.POST.get('cuenta'),
@@ -427,7 +429,8 @@ class TransaccionesView(APIView):
                                     cantidad=request.POST.get('cantidad'),
                                     divisa=request.POST.get('divisa'),
                                     fecha=parsed_date,
-                                    comentarios=request.POST.get('comentarios')
+                                    comentarios=request.POST.get('comentarios'),
+                                    a_cuotas=a_cuotas
                                     )
             clave_categoria=request.POST.get('categoria_gasto')
             clave_subcategoria=request.POST.get('subcategoria_gasto')
@@ -439,7 +442,8 @@ class TransaccionesView(APIView):
                                     cantidad=request.POST.get('cantidad'),
                                     divisa=request.POST.get('divisa'),
                                     fecha=parsed_date,
-                                    comentarios=request.POST.get('comentarios')
+                                    comentarios=request.POST.get('comentarios'),
+                                    a_cuotas=a_cuotas
                                     )
             clave_categoria=request.POST.get('categoria_ingreso')
             clave_subcategoria=request.POST.get('subcategoria_ingreso')
@@ -450,13 +454,35 @@ class TransaccionesView(APIView):
         if imagen:
             image = imagen.read()
 
-            ultima_publicacion = transaccion.objects.latest('id')
+            ultima_transaccion = transaccion.objects.latest('id')
 
-            ultima_publicacion.foto.save('imagen_transaccion_'+ str(ultima_publicacion.id) + '.jpg',  ContentFile(image), save=False) # se guarda la nueva foto
-            ultima_publicacion.save()
+            ultima_transaccion.foto.save('imagen_transaccion_'+ str(ultima_transaccion.id) + '.jpg',  ContentFile(image), save=False) # se guarda la nueva foto
+            ultima_transaccion.save()
 
 
+        if request.POST.get('cantidad_pagos'):
+            ultima_transaccion = transaccion.objects.latest('id')
 
+            cantidad_cuota= (float (request.POST.get('cantidad'))) / (float(request.POST.get('cantidad_pagos')))
+
+
+            aux_fecha=parsed_date
+            for i in range(int(request.POST.get('cantidad_pagos'))):
+                aux= aux_fecha.split("-") # auxiliar que contendra la fecha divida en a;o, mes y dia
+                cuotas.objects.create(clave_transaccion_id=ultima_transaccion.id,
+                                      cantidad=cantidad_cuota,
+                                      fecha=aux_fecha)
+                int_aux = int(aux[1])
+                
+                #aumenta la fecha para la siguiente cuota
+                if int_aux == 12:
+                    aux[1]="1"
+                    int_aux0=int(aux[0])
+                    aux[0]=str(int_aux0 + 1)
+                else:
+                    aux[1]= str(int_aux + 1)
+                aux_fecha=aux[0]+ "-" + aux[1] + "-" + aux[2]
+                
         datos={'message': "Exito"}
 
         #Cambio de balances
@@ -857,16 +883,16 @@ class TransaccionesDia(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).order_by("-id").values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).order_by("-id").values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
 
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).order_by("-id").values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
                         
                     else:
                         
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).order_by("-id").values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).values())
                         
 
                     if len(transacciones)>0:
@@ -4032,5 +4058,78 @@ class TransferenciasCuenta(APIView): #Se requiere login
         
         else:
             datos={'message': "Ingrese un Id para poder buscar"}
+            return JsonResponse(datos)
+
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class PagosCuotas(APIView):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+    def get(self,request, tipo="",clave_categoria=0, id=0):
+        
+
+        if (id>0):
+            
+
+            cuentas=list(cuenta.objects.filter(clave_usuario=id).values())
+
+
+            if len(cuentas)>0:
+                lista_transacciones=[]   
+                for elemento in cuentas:
+                    transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(a_cuotas="SI").values())
+                        
+
+                    if len(transacciones)>0:
+                        for elemento2 in transacciones:
+                            lista_transacciones.append(elemento2)
+
+                if len(lista_transacciones)>0:
+                    lista_final=[]
+                    #Proceso para obtener el los nombres y no se muestre el numero de las llaves foraneas
+                    for elemento in lista_transacciones:
+                        #para obtener las cuentas
+                        aux_cuentas= cuenta.objects.filter(id=elemento['clave_cuenta_id']).values()
+                        for aux_cuenta in aux_cuentas:
+                            elemento['nombre_cuenta']=aux_cuenta['nombre']
+                        #para obtener las categorias
+                        aux_categorias= categoria.objects.filter(id=elemento['clave_categoria_id']).values()
+                        for aux_categoria in aux_categorias:
+                            elemento['nombre_categoria']=aux_categoria['nombre']
+                        #para obtener las subcategorias
+                        aux_subcategorias= subcategoria.objects.filter(id=elemento['clave_subcategoria_id']).values()
+                        if len(aux_subcategorias)>0:
+                            for aux_subcategoria in aux_subcategorias:
+                                elemento['nombre_subcategoria']=aux_subcategoria['nombre']
+                        else:
+                            elemento['nombre_subcategoria']="**Ninguna**"
+
+                        lista_final.append(elemento)
+
+                    lista_cuotas=[]
+                    for elemento in lista_final:
+                        aux_cuotas=list(cuotas.objects.filter(clave_transaccion=elemento["id"]).values())
+                        if len(aux_cuotas)>0:
+                            for elemento2 in aux_cuotas:
+                                lista_cuotas.append(elemento2)
+
+
+                    datos = {'message': 'Exito', "Transacciones": lista_final, "Cuotas": lista_cuotas}
+                    
+                else:
+                    datos={'message': "No se encontraron transacciones asociados a ese usuario"}
+            else:
+                datos={'message': "No se encontraron cuentas asociadas a ese usuario"}
+                    
+            return JsonResponse(datos)
+
+
+            
+        else:
+            datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
  

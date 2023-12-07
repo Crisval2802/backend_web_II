@@ -50,7 +50,7 @@ class transaccion(models.Model):
     fecha=models.DateField()
     comentarios=models.CharField(max_length=500, null=True)
     foto = models.ImageField(upload_to='imagenes_transacciones', null=True)
-
+    a_cuotas = models.CharField(max_length=2, default="NO")
 
 class transferencia(models.Model):
     clave_cuenta = models.ForeignKey(cuenta, null=False, blank=False, on_delete=models.DO_NOTHING)
@@ -76,4 +76,9 @@ class limite(models.Model):
     clave_categoria = models.ForeignKey(categoria, null=True, blank=False, on_delete=models.DO_NOTHING)
     fecha_limite=models.DateField()
     divisa=models.CharField(max_length=3, default="mxn")
+
+class cuotas(models.Model):
+    clave_transaccion = models.ForeignKey(transaccion, null=False, blank=False, on_delete=models.DO_NOTHING)
+    cantidad=models.FloatField()
+    fecha=models.DateField()
 
