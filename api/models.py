@@ -49,6 +49,8 @@ class transaccion(models.Model):
     divisa=models.CharField(max_length=3)
     fecha=models.DateField()
     comentarios=models.CharField(max_length=500, null=True)
+    foto = models.ImageField(upload_to='imagenes_transacciones', null=True)
+
 
 class transferencia(models.Model):
     clave_cuenta = models.ForeignKey(cuenta, null=False, blank=False, on_delete=models.DO_NOTHING)

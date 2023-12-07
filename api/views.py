@@ -2,7 +2,7 @@ import json
 import datetime #para el manejo de fechas
 import requests
 
-
+from django.core.files.base import ContentFile
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -171,7 +171,7 @@ class UsuarioView(APIView):
                             aux_objetivo.save()
 
             aux.save()
-            datos={'message': limites}
+            datos={'message': "exito"}
 
         else:
             datos={'message': "Usuario no encontrado"}
@@ -301,7 +301,7 @@ class CategoriasView(APIView):
             datos={'message': "Usuario no encontrado"}
         return JsonResponse(datos)
     
-    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
+   
     def delete (self,request, id):
         categorias=list(categoria.objects.filter(id=id).values())
         if len(categorias)>0:
@@ -409,7 +409,7 @@ class TransaccionesView(APIView):
         
 
     def post (self,request):
-        jd=json.loads(request.body)
+        
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
 
         clave_categoria=''
@@ -417,33 +417,50 @@ class TransaccionesView(APIView):
 
 
 
-        if (jd['tipo']=="Gasto"):
-            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
-                                    clave_categoria_id=jd["categoria_gasto"],
-                                    clave_subcategoria_id=jd["subcategoria_gasto"],
-                                    tipo=jd["tipo"],
-                                    cantidad=jd["cantidad"],
-                                    divisa=jd["divisa"],
+
+
+        if (request.POST.get('tipo')=="Gasto"):
+            transaccion.objects.create(clave_cuenta_id=request.POST.get('cuenta'),
+                                    clave_categoria_id=request.POST.get('categoria_gasto'),
+                                    clave_subcategoria_id=request.POST.get('subcategoria_gasto'),
+                                    tipo=request.POST.get('tipo'),
+                                    cantidad=request.POST.get('cantidad'),
+                                    divisa=request.POST.get('divisa'),
                                     fecha=parsed_date,
-                                    comentarios=jd["comentarios"])
-            clave_categoria=jd['categoria_gasto']
-            clave_subcategoria=jd['subcategoria_gasto']
+                                    comentarios=request.POST.get('comentarios')
+                                    )
+            clave_categoria=request.POST.get('categoria_gasto')
+            clave_subcategoria=request.POST.get('subcategoria_gasto')
         else:
-            transaccion.objects.create(clave_cuenta_id=jd["cuenta"],
-                                    clave_categoria_id=jd["categoria_ingreso"],
-                                    clave_subcategoria_id=jd["subcategoria_ingreso"],
-                                    tipo=jd["tipo"],
-                                    cantidad=jd["cantidad"],
-                                    divisa=jd["divisa"],
+            transaccion.objects.create(clave_cuenta_id=request.POST.get('cuenta'),
+                                    clave_categoria_id=request.POST.get('categoria_ingreso'),
+                                    clave_subcategoria_id=request.POST.get('subcategoria_ingreso'),
+                                    tipo=request.POST.get('tipo'),
+                                    cantidad=request.POST.get('cantidad'),
+                                    divisa=request.POST.get('divisa'),
                                     fecha=parsed_date,
-                                    comentarios=jd["comentarios"])
-            clave_categoria=jd['categoria_ingreso']
-            clave_subcategoria=jd['subcategoria_ingreso']
+                                    comentarios=request.POST.get('comentarios')
+                                    )
+            clave_categoria=request.POST.get('categoria_ingreso')
+            clave_subcategoria=request.POST.get('subcategoria_ingreso')
+
+
+ 
+        imagen = request.FILES.get('imagen')
+        if imagen:
+            image = imagen.read()
+
+            ultima_publicacion = transaccion.objects.latest('id')
+
+            ultima_publicacion.foto.save('imagen_transaccion_'+ str(ultima_publicacion.id) + '.jpg',  ContentFile(image), save=False) # se guarda la nueva foto
+            ultima_publicacion.save()
+
+
 
         datos={'message': "Exito"}
 
         #Cambio de balances
-        aux_cuenta=cuenta.objects.get(id=jd['cuenta'])
+        aux_cuenta=cuenta.objects.get(id=request.POST.get('cuenta'))
 
         clave_usuario=aux_cuenta.clave_usuario_id
 
@@ -452,12 +469,12 @@ class TransaccionesView(APIView):
 
         balance=float(aux_cuenta.balance)
         # se resta o suma del balance segun sea el caso
-        if (jd['tipo']=="Ingreso"):
-            balance= balance + float(jd['cantidad'])
+        if (request.POST.get('tipo')=="Ingreso"):
+            balance= balance + float(request.POST.get('cantidad'))
             aux_cuenta.balance=balance
 
             balance = float(aux_usuario.balance)
-            balance = balance + float(jd['cantidad'])
+            balance = balance + float(request.POST.get('cantidad'))
             aux_usuario.balance = balance
             
             # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
@@ -466,7 +483,7 @@ class TransaccionesView(APIView):
                 for elemento in objetivos:
                     clave= elemento.id
                     aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total = aux_objetivo.total + jd['cantidad']
+                    aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
                     aux_objetivo.save()
             
             # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
@@ -475,17 +492,17 @@ class TransaccionesView(APIView):
                 for elemento in objetivos:
                     clave= elemento.id
                     aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total = aux_objetivo.total + jd['cantidad']
+                    aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
                     aux_objetivo.save()
 
 
 
         else:
-            balance= balance - float(jd['cantidad'])
+            balance= balance - float(request.POST.get('cantidad'))
             aux_cuenta.balance=balance
 
             balance = float(aux_usuario.balance)
-            balance = balance - float(jd['cantidad'])
+            balance = balance - float(request.POST.get('cantidad'))
             aux_usuario.balance = balance
 
 
@@ -497,7 +514,7 @@ class TransaccionesView(APIView):
                 for elemento in limites:
                     clave= elemento.id
                     aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total = aux_limite.total + jd['cantidad']
+                    aux_limite.total = aux_limite.total + request.POST.get('cantidad')
                     aux_limite.save()
             
             # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
@@ -506,7 +523,7 @@ class TransaccionesView(APIView):
                 for elemento in limites:
                     clave= elemento.id
                     aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total = aux_limite.total + jd['cantidad']
+                    aux_limite.total = aux_limite.total + request.POST.get('cantidad')
                     aux_limite.save()
 
         aux_cuenta.save()
@@ -515,13 +532,13 @@ class TransaccionesView(APIView):
         #se suma al contador de transacciones de las categorias
         aux_categoria=categoria.objects.get(id=clave_categoria)
         aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
-        aux_categoria.total_dinero= aux_categoria.total_dinero + jd['cantidad']
+        aux_categoria.total_dinero= aux_categoria.total_dinero + float(request.POST.get('cantidad'))
         aux_categoria.save()
 
         if (clave_subcategoria!=''):
             aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
             aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
-            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + jd['cantidad']
+            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + float(request.POST.get('cantidad'))
             aux_subcategoria.save()
 
 
@@ -668,7 +685,7 @@ class ObjetivosView(APIView):
     def put (self,request, id=0):
         pass
     
-    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
+
     def delete (self,request, id):
         objetivos=list(objetivo.objects.filter(id=id).values())
         if len(objetivos)>0:
@@ -729,7 +746,7 @@ class LimitesView(APIView):
     def put (self,request, id=0):
         pass
     
-    @method_decorator(staff_member_required(login_url='login'), name='dispatch')
+
     def delete (self,request, id):
         limites=list(limite.objects.filter(id=id).values())
         if len(limites)>0:
@@ -762,15 +779,15 @@ class TransaccionesRango(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(clave_categoria)).values())
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=int(clave_categoria)).order_by("fecha").values())
 
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).order_by("fecha").values())
                     
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).order_by("fecha").values())
                     else:
-                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).values())#__range sirve para obtener registros entre 2 rangos de fechas
+                        transacciones=list(transaccion.objects.filter(fecha__range=(fecha, fecha2)).filter(clave_cuenta=elemento["id"]).order_by("fecha").values())#__range sirve para obtener registros entre 2 rangos de fechas
                     
 
                     if len(transacciones)>0:
@@ -840,16 +857,16 @@ class TransaccionesDia(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).order_by("-id").values())
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).order_by("-id").values())
 
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).order_by("-id").values())
                         
                     else:
                         
-                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).values())
+                        transacciones=list(transaccion.objects.filter(fecha=parsed_date).filter(clave_cuenta=elemento["id"]).order_by("-id").values())
                         
 
                     if len(transacciones)>0:
@@ -918,13 +935,13 @@ class TransaccionesMes(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).order_by("fecha").values())
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).order_by("fecha").values())
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).order_by("fecha").values())
                     else:
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).order_by("fecha").values())
 
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
@@ -1005,14 +1022,14 @@ class TransaccionesYear(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).order_by("fecha").values())
 
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).order_by("fecha").values())
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).order_by("fecha").values())
                     else:
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).order_by("fecha").values())
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
                             lista_transacciones.append(elemento2)
@@ -2067,13 +2084,13 @@ class TransaccionesSemana(APIView):
                 lista_transacciones=[]   
                 for elemento in cuentas:
                     if ((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).order_by("fecha").values())
                     elif((tipo!="Ingreso" and tipo!="Gasto") and clave_categoria!=0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(clave_categoria=clave_categoria).filter(fecha__range=(inicio, final)).order_by("fecha").values())
                     elif((tipo=="Ingreso" or tipo=="Gasto") and clave_categoria==0):
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(fecha__range=(inicio, final)).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(tipo=tipo).filter(fecha__range=(inicio, final)).order_by("fecha").values())
                     else:
-                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(fecha__range=(inicio, final)).values())
+                        transacciones=list(transaccion.objects.filter(clave_cuenta=elemento["id"]).filter(fecha__range=(inicio, final)).order_by("fecha").values())
                     
                     if len(transacciones)>0:
                         for elemento2 in transacciones:
