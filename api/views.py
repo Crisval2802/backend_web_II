@@ -15,6 +15,10 @@ from django.http import HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
 
+import matplotlib.pyplot as plt
+import io
+import base64
+
 
 from django.http.response import JsonResponse 
 from django.views import View
@@ -26,7 +30,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib.admin.views.decorators import staff_member_required
 
-
+from django.db.models import Sum
 from django.conf import settings
 from django.core.mail import  EmailMultiAlternatives
 from django.contrib.auth import authenticate
@@ -409,18 +413,13 @@ class TransaccionesView(APIView):
         
 
     def post (self,request):
-        
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-
         clave_categoria=''
         clave_subcategoria=''
-
-
         if request.POST.get('cantidad_pagos'):
             a_cuotas="SI"
         else:
             a_cuotas="NO"
-
         if (request.POST.get('tipo')=="Gasto"):
             transaccion.objects.create(clave_cuenta_id=request.POST.get('cuenta'),
                                     clave_categoria_id=request.POST.get('categoria_gasto'),
@@ -447,31 +446,21 @@ class TransaccionesView(APIView):
                                     )
             clave_categoria=request.POST.get('categoria_ingreso')
             clave_subcategoria=request.POST.get('subcategoria_ingreso')
-
-
- 
         imagen = request.FILES.get('imagen')
+        
         if imagen:
             image = imagen.read()
-
             ultima_transaccion = transaccion.objects.latest('id')
-
             ultima_transaccion.foto.save('imagen_transaccion_'+ str(ultima_transaccion.id) + '.jpg',  ContentFile(image), save=False) # se guarda la nueva foto
             ultima_transaccion.save()
 
-
         if request.POST.get('cantidad_pagos'):
             ultima_transaccion = transaccion.objects.latest('id')
-
             cantidad_cuota= (float (request.POST.get('cantidad'))) / (float(request.POST.get('cantidad_pagos')))
-
-
             aux_fecha=parsed_date
             for i in range(int(request.POST.get('cantidad_pagos'))):
                 aux= aux_fecha.split("-") # auxiliar que contendra la fecha divida en a;o, mes y dia
-                cuotas.objects.create(clave_transaccion_id=ultima_transaccion.id,
-                                      cantidad=cantidad_cuota,
-                                      fecha=aux_fecha)
+                
                 int_aux = int(aux[1])
                 
                 #aumenta la fecha para la siguiente cuota
@@ -482,95 +471,76 @@ class TransaccionesView(APIView):
                 else:
                     aux[1]= str(int_aux + 1)
                 aux_fecha=aux[0]+ "-" + aux[1] + "-" + aux[2]
-                
-        datos={'message': "Exito"}
-
-        #Cambio de balances
-        aux_cuenta=cuenta.objects.get(id=request.POST.get('cuenta'))
-
-        clave_usuario=aux_cuenta.clave_usuario_id
-
-        aux_usuario=usuario.objects.get(id=int(clave_usuario))
-
-
-        balance=float(aux_cuenta.balance)
-        # se resta o suma del balance segun sea el caso
-        if (request.POST.get('tipo')=="Ingreso"):
-            balance= balance + float(request.POST.get('cantidad'))
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance + float(request.POST.get('cantidad'))
-            aux_usuario.balance = balance
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
-                    aux_objetivo.save()
-            
-            # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
-            objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(objetivos)>0:
-                for elemento in objetivos:
-                    clave= elemento.id
-                    aux_objetivo=objetivo.objects.get(id=clave)
-                    aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
-                    aux_objetivo.save()
-
-
+                cuotas.objects.create(clave_transaccion_id=ultima_transaccion.id,
+                                      cantidad=cantidad_cuota,
+                                      fecha=aux_fecha)
 
         else:
-            balance= balance - float(request.POST.get('cantidad'))
-            aux_cuenta.balance=balance
-
-            balance = float(aux_usuario.balance)
-            balance = balance - float(request.POST.get('cantidad'))
-            aux_usuario.balance = balance
-
-
-
-            parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total = aux_limite.total + request.POST.get('cantidad')
-                    aux_limite.save()
-            
-            # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
-            limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
-            if len(limites)>0:
-                for elemento in limites:
-                    clave= elemento.id
-                    aux_limite=limite.objects.get(id=clave)
-                    aux_limite.total = aux_limite.total + request.POST.get('cantidad')
-                    aux_limite.save()
-
-        aux_cuenta.save()
-        aux_usuario.save()
-
-        #se suma al contador de transacciones de las categorias
-        aux_categoria=categoria.objects.get(id=clave_categoria)
-        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
-        aux_categoria.total_dinero= aux_categoria.total_dinero + float(request.POST.get('cantidad'))
-        aux_categoria.save()
-
-        if (clave_subcategoria!=''):
-            aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
-            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
-            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + float(request.POST.get('cantidad'))
-            aux_subcategoria.save()
-
-
+            #Cambio de balances
+            aux_cuenta=cuenta.objects.get(id=request.POST.get('cuenta'))
+            clave_usuario=aux_cuenta.clave_usuario_id
+            aux_usuario=usuario.objects.get(id=int(clave_usuario))
+            balance=float(aux_cuenta.balance)
+            # se resta o suma del balance segun sea el caso
+            if (request.POST.get('tipo')=="Ingreso"):
+                balance= balance + float(request.POST.get('cantidad'))
+                aux_cuenta.balance=balance
+                balance = float(aux_usuario.balance)
+                balance = balance + float(request.POST.get('cantidad'))
+                aux_usuario.balance = balance
+                # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+                objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
+                if len(objetivos)>0:
+                    for elemento in objetivos:
+                        clave= elemento.id
+                        aux_objetivo=objetivo.objects.get(id=clave)
+                        aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
+                        aux_objetivo.save()
+                # se buscan los objetivos con fecha menor limite mayor o igual a la actual y la categoria sea null
+                objetivos=list(objetivo.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+                if len(objetivos)>0:
+                    for elemento in objetivos:
+                        clave= elemento.id
+                        aux_objetivo=objetivo.objects.get(id=clave)
+                        aux_objetivo.total = aux_objetivo.total + request.POST.get('cantidad')
+                        aux_objetivo.save()
+            else:
+                balance= balance - float(request.POST.get('cantidad'))
+                aux_cuenta.balance=balance
+                balance = float(aux_usuario.balance)
+                balance = balance - float(request.POST.get('cantidad'))
+                aux_usuario.balance = balance
+                parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+                # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+                limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
+                if len(limites)>0:
+                    for elemento in limites:
+                        clave= elemento.id
+                        aux_limite=limite.objects.get(id=clave)
+                        aux_limite.total = aux_limite.total + request.POST.get('cantidad')
+                        aux_limite.save()
+                # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
+                limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+                if len(limites)>0:
+                    for elemento in limites:
+                        clave= elemento.id
+                        aux_limite=limite.objects.get(id=clave)
+                        aux_limite.total = aux_limite.total + request.POST.get('cantidad')
+                        aux_limite.save()
+            aux_cuenta.save()
+            aux_usuario.save()
+            #se suma al contador de transacciones de las categorias
+            aux_categoria=categoria.objects.get(id=clave_categoria)
+            aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
+            aux_categoria.total_dinero= aux_categoria.total_dinero + float(request.POST.get('cantidad'))
+            aux_categoria.save()
+            if (clave_subcategoria!=''):
+                aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
+                aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
+                aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + float(request.POST.get('cantidad'))
+                aux_subcategoria.save()
         
-
-
+        datos={'message': "Exito"}
         return JsonResponse(datos)
 
 
@@ -1148,8 +1118,8 @@ class TransaccionesSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                     else:
                         fecha_final[0] = aux[0]
                         
@@ -1164,8 +1134,8 @@ class TransaccionesSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                 
                 else:
                     fecha_final[0] = aux[0]
@@ -1180,8 +1150,8 @@ class TransaccionesSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
 
             elif (aux[1]=="02"):
@@ -1198,8 +1168,8 @@ class TransaccionesSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
                 else:
                     fecha_final[0] = aux[0]
@@ -1215,8 +1185,8 @@ class TransaccionesSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
             else: # se validan meses con 30 dias
                 if ((int(aux[2]) + 6) > 30):
                     dias_restantes= "0" + str((int(aux[2]) + 6) - 30)
@@ -1229,8 +1199,8 @@ class TransaccionesSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                     else:
                         fecha_final[0] = aux[0]
                         
@@ -1245,8 +1215,8 @@ class TransaccionesSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                 else:
                     fecha_final[0] = aux[0]
                     fecha_final[1] = aux[1]
@@ -1259,8 +1229,8 @@ class TransaccionesSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
         elif (aux2.weekday()==1): # Es martes
             if (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
@@ -1289,8 +1259,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+5)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
@@ -1311,8 +1281,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
@@ -1325,8 +1295,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
@@ -1344,8 +1314,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -1363,8 +1333,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==2): # Es miercoles
             if (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -1393,8 +1363,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+4)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1421,8 +1391,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+4)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -1442,8 +1412,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -1455,8 +1425,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -1473,8 +1443,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -1492,8 +1462,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==3): # Es jueves
             if (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -1522,8 +1492,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1550,8 +1520,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1578,8 +1548,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -1599,8 +1569,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -1612,8 +1582,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -1630,8 +1600,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -1649,8 +1619,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==4): # Es viernes
             if (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -1679,8 +1649,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1707,8 +1677,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1735,8 +1705,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1763,8 +1733,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -1784,8 +1754,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -1797,8 +1767,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -1815,8 +1785,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -1834,8 +1804,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==5): # Es sabado
             if (aux[2]=="05"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -1864,8 +1834,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1892,8 +1862,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="03"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1920,8 +1890,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -1948,8 +1918,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
@@ -1977,8 +1947,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -1998,8 +1968,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -2011,8 +1981,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -2029,8 +1999,8 @@ class TransaccionesSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -2048,8 +2018,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==6): # es domingo
 
@@ -2075,8 +2045,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[1] = aux[1]
                 fecha_final[2] = aux[2]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
                 
             else: # solo se resta para llegar al rango de fechas
@@ -2092,8 +2062,8 @@ class TransaccionesSemana(APIView):
                 fecha_final[1] = aux[1]
                 fecha_final[2] = aux[2]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             
 
@@ -2255,23 +2225,63 @@ class ReporteRango(APIView):
                         lista_final.append(elemento)
 
 
-                    datos={'message': "Exito", "Transacciones": lista_final,"fecha": date.today(), "usuario":nombre_usuario}
-                    #Proceso para convertir el html a pdf
-                    template = get_template('reporte.html')
-                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-                    
-                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-                    response = HttpResponse(content_type='application/pdf')
-                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+                    #Proceso para obtener los labels y valores para la grafica
 
-                    # Convierte el HTML a PDF y escribe en la respuesta
-                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    totales_por_cuenta = {}
+
+                    # Calcular la suma acumulativa por cuenta
+                    for trans in lista_final:
+                        clave_cuenta = trans["nombre_cuenta"]
+                        cantidad = trans["cantidad"]
+
+                        if clave_cuenta in totales_por_cuenta:
+                            totales_por_cuenta[clave_cuenta] += cantidad
+                        else:
+                            totales_por_cuenta[clave_cuenta] = cantidad
+
+                        # Convertir el diccionario en una lista de totales
+                        totales_lista = [{"cuenta": cuenta, "total": total} for cuenta, total in totales_por_cuenta.items()]
+
+                    labels= []
+                    valores=[]
+                    for item in totales_lista:
+
+                        labels.append(item["cuenta"])
+                    for item in totales_lista:
+                        valores.append(item["total"])
+
                     
-                    # Si la conversión tuvo éxito, devuelve la respuesta
-                    if pisa_status.err:
-                        return HttpResponse('Error al generar el PDF')
                     
-                    return response
+                    
+                    # Crear el gráfico con matplotlib
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                    ax.barh(labels, valores)
+                    plt.title('Representacion grafica')
+                    plt.xlabel('Dinero')
+                    plt.ylabel('Cuentas')
+                    plt.xticks(rotation=45)
+
+                    # Convertir el gráfico a una imagen en formato base64
+                    buffer = io.BytesIO()
+                    plt.savefig(buffer, format='png')
+                    buffer.seek(0)
+                    image_data = base64.b64encode(buffer.read()).decode('utf-8')
+
+
+
+
+                    # Pasar el gráfico a la plantilla HTML
+                    context = {
+                        'example_data': 'Hola, este es un ejemplo de datos para tu PDF.',
+                        'chart_image': image_data,
+                        'transacciones': lista_final,
+                        "fecha": date.today(),
+                        "usuario":nombre_usuario
+                    }
+
+                    # Generar el PDF
+                    pdf = render_to_pdf('reporte.html', context)
+                    return pdf
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -2350,23 +2360,63 @@ class ReporteDia(APIView):
                         lista_final.append(elemento)
 
 
-                    datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
-                    #Proceso para convertir el html a pdf
-                    template = get_template('reporte.html')
-                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-                    
-                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-                    response = HttpResponse(content_type='application/pdf')
-                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+                    #Proceso para obtener los labels y valores para la grafica
 
-                    # Convierte el HTML a PDF y escribe en la respuesta
-                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    totales_por_cuenta = {}
+
+                    # Calcular la suma acumulativa por cuenta
+                    for trans in lista_final:
+                        clave_cuenta = trans["nombre_cuenta"]
+                        cantidad = trans["cantidad"]
+
+                        if clave_cuenta in totales_por_cuenta:
+                            totales_por_cuenta[clave_cuenta] += cantidad
+                        else:
+                            totales_por_cuenta[clave_cuenta] = cantidad
+
+                        # Convertir el diccionario en una lista de totales
+                        totales_lista = [{"cuenta": cuenta, "total": total} for cuenta, total in totales_por_cuenta.items()]
+
+                    labels= []
+                    valores=[]
+                    for item in totales_lista:
+
+                        labels.append(item["cuenta"])
+                    for item in totales_lista:
+                        valores.append(item["total"])
+
                     
-                    # Si la conversión tuvo éxito, devuelve la respuesta
-                    if pisa_status.err:
-                        return HttpResponse('Error al generar el PDF')
                     
-                    return response
+                    
+                    # Crear el gráfico con matplotlib
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                    ax.barh(labels, valores)
+                    plt.title('Representacion grafica')
+                    plt.xlabel('Dinero')
+                    plt.ylabel('Cuentas')
+                    plt.xticks(rotation=45)
+
+                    # Convertir el gráfico a una imagen en formato base64
+                    buffer = io.BytesIO()
+                    plt.savefig(buffer, format='png')
+                    buffer.seek(0)
+                    image_data = base64.b64encode(buffer.read()).decode('utf-8')
+
+
+
+
+                    # Pasar el gráfico a la plantilla HTML
+                    context = {
+                        'example_data': 'Hola, este es un ejemplo de datos para tu PDF.',
+                        'chart_image': image_data,
+                        'transacciones': lista_final,
+                        "fecha": date.today(),
+                        "usuario":nombre_usuario
+                    }
+
+                    # Generar el PDF
+                    pdf = render_to_pdf('reporte.html', context)
+                    return pdf
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -2454,23 +2504,63 @@ class ReporteMes(APIView):
                             lista_final.append(elemento)
 
 
-                        datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
-                        #Proceso para convertir el html a pdf
-                        template = get_template('reporte.html')
-                        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-                        
-                        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-                        response = HttpResponse(content_type='application/pdf')
-                        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+                        #Proceso para obtener los labels y valores para la grafica
 
-                        # Convierte el HTML a PDF y escribe en la respuesta
-                        pisa_status = pisa.CreatePDF(html, dest=response)
+                        totales_por_cuenta = {}
+
+                        # Calcular la suma acumulativa por cuenta
+                        for trans in lista_final:
+                            clave_cuenta = trans["nombre_cuenta"]
+                            cantidad = trans["cantidad"]
+
+                            if clave_cuenta in totales_por_cuenta:
+                                totales_por_cuenta[clave_cuenta] += cantidad
+                            else:
+                                totales_por_cuenta[clave_cuenta] = cantidad
+
+                            # Convertir el diccionario en una lista de totales
+                            totales_lista = [{"cuenta": cuenta, "total": total} for cuenta, total in totales_por_cuenta.items()]
+
+                        labels= []
+                        valores=[]
+                        for item in totales_lista:
+
+                            labels.append(item["cuenta"])
+                        for item in totales_lista:
+                            valores.append(item["total"])
+
                         
-                        # Si la conversión tuvo éxito, devuelve la respuesta
-                        if pisa_status.err:
-                            return HttpResponse('Error al generar el PDF')
                         
-                        return response
+                        
+                        # Crear el gráfico con matplotlib
+                        fig, ax = plt.subplots(figsize=(14, 6))
+                        ax.barh(labels, valores)
+                        plt.title('Representacion grafica')
+                        plt.xlabel('Dinero')
+                        plt.ylabel('Cuentas')
+                        plt.xticks(rotation=45)
+
+                        # Convertir el gráfico a una imagen en formato base64
+                        buffer = io.BytesIO()
+                        plt.savefig(buffer, format='png')
+                        buffer.seek(0)
+                        image_data = base64.b64encode(buffer.read()).decode('utf-8')
+
+
+
+
+                        # Pasar el gráfico a la plantilla HTML
+                        context = {
+                            'example_data': 'Hola, este es un ejemplo de datos para tu PDF.',
+                            'chart_image': image_data,
+                            'transacciones': lista_final,
+                            "fecha": date.today(),
+                            "usuario":nombre_usuario
+                        }
+
+                        # Generar el PDF
+                        pdf = render_to_pdf('reporte.html', context)
+                        return pdf
                     else:
                         datos={'message': "No se encontraron transacciones asociadooos a ese usuario"}
                         return JsonResponse(datos)
@@ -2561,23 +2651,63 @@ class ReporteYear(APIView):
                             lista_final.append(elemento)
 
 
-                        datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
-                        #Proceso para convertir el html a pdf
-                        template = get_template('reporte.html')
-                        html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-                        
-                        # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-                        response = HttpResponse(content_type='application/pdf')
-                        response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+                        #Proceso para obtener los labels y valores para la grafica
 
-                        # Convierte el HTML a PDF y escribe en la respuesta
-                        pisa_status = pisa.CreatePDF(html, dest=response)
+                        totales_por_cuenta = {}
+
+                        # Calcular la suma acumulativa por cuenta
+                        for trans in lista_final:
+                            clave_cuenta = trans["nombre_cuenta"]
+                            cantidad = trans["cantidad"]
+
+                            if clave_cuenta in totales_por_cuenta:
+                                totales_por_cuenta[clave_cuenta] += cantidad
+                            else:
+                                totales_por_cuenta[clave_cuenta] = cantidad
+
+                            # Convertir el diccionario en una lista de totales
+                            totales_lista = [{"cuenta": cuenta, "total": total} for cuenta, total in totales_por_cuenta.items()]
+
+                        labels= []
+                        valores=[]
+                        for item in totales_lista:
+
+                            labels.append(item["cuenta"])
+                        for item in totales_lista:
+                            valores.append(item["total"])
+
                         
-                        # Si la conversión tuvo éxito, devuelve la respuesta
-                        if pisa_status.err:
-                            return HttpResponse('Error al generar el PDF')
                         
-                        return response
+                        
+                        # Crear el gráfico con matplotlib
+                        fig, ax = plt.subplots(figsize=(14, 6))
+                        ax.barh(labels, valores)
+                        plt.title('Representacion grafica')
+                        plt.xlabel('Dinero')
+                        plt.ylabel('Cuentas')
+                        plt.xticks(rotation=45)
+
+                        # Convertir el gráfico a una imagen en formato base64
+                        buffer = io.BytesIO()
+                        plt.savefig(buffer, format='png')
+                        buffer.seek(0)
+                        image_data = base64.b64encode(buffer.read()).decode('utf-8')
+
+
+
+
+                        # Pasar el gráfico a la plantilla HTML
+                        context = {
+                            'example_data': 'Hola, este es un ejemplo de datos para tu PDF.',
+                            'chart_image': image_data,
+                            'transacciones': lista_final,
+                            "fecha": date.today(),
+                            "usuario":nombre_usuario
+                        }
+
+                        # Generar el PDF
+                        pdf = render_to_pdf('reporte.html', context)
+                        return pdf
                     else:
                         datos={'message': "No se encontraron transacciones asociados a ese usuario"}
                         return JsonResponse(datos)
@@ -2627,8 +2757,8 @@ class ReporteSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                     else:
                         fecha_final[0] = aux[0]
                         
@@ -2643,8 +2773,8 @@ class ReporteSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                 
                 else:
                     fecha_final[0] = aux[0]
@@ -2659,8 +2789,8 @@ class ReporteSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
 
             elif (aux[1]=="02"):
@@ -2677,8 +2807,8 @@ class ReporteSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
                 else:
                     fecha_final[0] = aux[0]
@@ -2694,8 +2824,8 @@ class ReporteSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
             else: # se validan meses con 30 dias
                 if ((int(aux[2]) + 6) > 30):
                     dias_restantes= "0" + str((int(aux[2]) + 6) - 30)
@@ -2708,8 +2838,8 @@ class ReporteSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                     else:
                         fecha_final[0] = aux[0]
                         
@@ -2724,8 +2854,8 @@ class ReporteSemana(APIView):
                         fecha_inicial[1] = aux[1]
                         fecha_inicial[2] = aux[2]
 
-                        print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                        print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                        
+                        
                 else:
                     fecha_final[0] = aux[0]
                     fecha_final[1] = aux[1]
@@ -2738,8 +2868,8 @@ class ReporteSemana(APIView):
                     fecha_inicial[1] = aux[1]
                     fecha_inicial[2] = aux[2]
 
-                    print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                    print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                    
+                    
 
         elif (aux2.weekday()==1): # Es martes
             if (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
@@ -2768,8 +2898,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+5)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
@@ -2790,8 +2920,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
@@ -2804,8 +2934,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif ((int(aux[2]) + 5> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
@@ -2823,8 +2953,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-1)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -2842,8 +2972,8 @@ class ReporteSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==2): # Es miercoles
             if (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -2872,8 +3002,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+4)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -2900,8 +3030,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+4)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -2921,8 +3051,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -2934,8 +3064,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 4> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -2952,8 +3082,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-2)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -2971,8 +3101,8 @@ class ReporteSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==3): # Es jueves
             if (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -3001,8 +3131,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3029,8 +3159,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3057,8 +3187,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+3)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -3078,8 +3208,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -3091,8 +3221,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 3> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -3109,8 +3239,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-3)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -3128,8 +3258,8 @@ class ReporteSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==4): # Es viernes
             if (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -3158,8 +3288,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="03"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3186,8 +3316,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3214,8 +3344,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3242,8 +3372,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+2)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -3263,8 +3393,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -3276,8 +3406,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 2> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -3294,8 +3424,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-4)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -3313,8 +3443,8 @@ class ReporteSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==5): # Es sabado
             if (aux[2]=="05"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
@@ -3343,8 +3473,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="04"): #Es el segundo del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3371,8 +3501,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="03"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3399,8 +3529,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif (aux[2]=="02"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
                     fecha_inicial[0] = str(int(aux[0])-1)
@@ -3427,8 +3557,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             elif (aux[2]=="01"): #Es el primero del mes y por ende el dia anterior corresponde al mes anterior
                 if (aux[1]=="01"):
@@ -3456,8 +3586,8 @@ class ReporteSemana(APIView):
                 fecha_final[2]="0" + str (int(aux[2])+1)
 
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 31) and (aux[1]=="01" or aux[1]=="03" or aux[1]=="05" or aux[1]=="07" or aux[1]=="08" or aux[1]=="10" or aux[1]=="12")): #la semana finaliza en el mes siguiente
                 if (aux[1]=="12"): # se cambia de anio
                     fecha_final[0]= str(int(aux[0]) + 1)
@@ -3477,8 +3607,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 28) and aux[1]=="02"):
                 fecha_final[0]=aux[0]
                 fecha_final[1]="03"
@@ -3490,8 +3620,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             elif ((int(aux[2]) + 1> 30) and (aux[1]=="04" or aux[1]=="06" or aux[1]=="09" or aux[1]=="11")):
 
                 fecha_final[0]=aux[0] #el anio queda igual
@@ -3508,8 +3638,8 @@ class ReporteSemana(APIView):
                 fecha_inicial[1]=aux[1]
                 fecha_inicial[2]= str(int(aux[2])-5)
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
             else: # la semana inicia y termina el mismo mes
                 fecha_inicial[0]=aux[0]
                 fecha_inicial[1]=aux[1]
@@ -3527,8 +3657,8 @@ class ReporteSemana(APIView):
                 fecha_final[0]=aux[0]
                 fecha_final[1]=aux[1]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
         elif (aux2.weekday()==6): # es domingo
 
@@ -3554,8 +3684,8 @@ class ReporteSemana(APIView):
                 fecha_final[1] = aux[1]
                 fecha_final[2] = aux[2]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
                 
             else: # solo se resta para llegar al rango de fechas
@@ -3571,8 +3701,8 @@ class ReporteSemana(APIView):
                 fecha_final[1] = aux[1]
                 fecha_final[2] = aux[2]
 
-                print(fecha_inicial[0]  + " " + fecha_inicial[1] + " " + fecha_inicial[2])
-                print(fecha_final[0]  + " " + fecha_final[1] + " " + fecha_final[2])
+                
+                
 
             
 
@@ -3629,23 +3759,63 @@ class ReporteSemana(APIView):
                         lista_final.append(elemento)
 
 
-                    datos={'message': "Exito", "Transacciones": lista_final, "fecha": date.today(), "usuario":nombre_usuario}
-                    #Proceso para convertir el html a pdf
-                    template = get_template('reporte.html')
-                    html = template.render({"datos":datos}) # Aqui se pasa el json con los datos obtenidos
-                    
-                    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
-                    response = HttpResponse(content_type='application/pdf')
-                    response['Content-Disposition'] = 'attachment; filename="Reporte de transacciones.pdf"'
+                    #Proceso para obtener los labels y valores para la grafica
 
-                    # Convierte el HTML a PDF y escribe en la respuesta
-                    pisa_status = pisa.CreatePDF(html, dest=response)
+                    totales_por_cuenta = {}
+
+                    # Calcular la suma acumulativa por cuenta
+                    for trans in lista_final:
+                        clave_cuenta = trans["nombre_cuenta"]
+                        cantidad = trans["cantidad"]
+
+                        if clave_cuenta in totales_por_cuenta:
+                            totales_por_cuenta[clave_cuenta] += cantidad
+                        else:
+                            totales_por_cuenta[clave_cuenta] = cantidad
+
+                        # Convertir el diccionario en una lista de totales
+                        totales_lista = [{"cuenta": cuenta, "total": total} for cuenta, total in totales_por_cuenta.items()]
+
+                    labels= []
+                    valores=[]
+                    for item in totales_lista:
+
+                        labels.append(item["cuenta"])
+                    for item in totales_lista:
+                        valores.append(item["total"])
+
                     
-                    # Si la conversión tuvo éxito, devuelve la respuesta
-                    if pisa_status.err:
-                        return HttpResponse('Error al generar el PDF')
                     
-                    return response
+                    
+                    # Crear el gráfico con matplotlib
+                    fig, ax = plt.subplots(figsize=(14, 6))
+                    ax.barh(labels, valores)
+                    plt.title('Representacion grafica')
+                    plt.xlabel('Dinero')
+                    plt.ylabel('Cuentas')
+                    plt.xticks(rotation=45)
+
+                    # Convertir el gráfico a una imagen en formato base64
+                    buffer = io.BytesIO()
+                    plt.savefig(buffer, format='png')
+                    buffer.seek(0)
+                    image_data = base64.b64encode(buffer.read()).decode('utf-8')
+
+
+
+
+                    # Pasar el gráfico a la plantilla HTML
+                    context = {
+                        'example_data': 'Hola, este es un ejemplo de datos para tu PDF.',
+                        'chart_image': image_data,
+                        'transacciones': lista_final,
+                        "fecha": date.today(),
+                        "usuario":nombre_usuario
+                    }
+
+                    # Generar el PDF
+                    pdf = render_to_pdf('reporte.html', context)
+                    return pdf
                     
                 else:
                     datos={'message': "No se encontraron transacciones asociados a ese usuario"}
@@ -4133,3 +4303,99 @@ class PagosCuotas(APIView):
             datos={'message': "Ingrese un id para poder buscar"}
             return JsonResponse(datos)
  
+
+@authentication_classes([TokenAuthentication])
+@permission_classes([IsAuthenticated])
+class PagarCuota(APIView):    
+    @method_decorator(csrf_exempt)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)
+
+    
+        
+    def put (self,request):
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+
+
+        
+        jd=json.loads(request.body)
+
+        aux_cuota = cuotas.objects.get(id=jd['clave'])
+        aux_cuota.pendiente='NO'
+        
+
+        cantidad=aux_cuota.cantidad
+
+        aux_transaccion = transaccion.objects.get(id=aux_cuota.clave_transaccion_id)
+
+        clave_categoria = aux_transaccion.clave_categoria_id
+        clave_subcategoria = aux_transaccion.clave_subcategoria_id
+
+        datos={'message': "Exito"}
+        #Cambio de balances
+        aux_cuenta=cuenta.objects.get(id=aux_transaccion.clave_cuenta_id)
+
+        clave_usuario=aux_cuenta.clave_usuario_id
+        
+        aux_usuario=usuario.objects.get(id=int(clave_usuario))
+        
+        balance=float(aux_cuenta.balance)
+
+
+
+        balance= balance - float(cantidad)
+        aux_cuenta.balance=balance
+        balance = float(aux_usuario.balance)
+        balance = balance - float(cantidad)
+        aux_usuario.balance = balance
+        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+
+        # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
+        limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
+        if len(limites)>0:
+            for elemento in limites:
+                clave= elemento.id
+                aux_limite=limite.objects.get(id=clave)
+                aux_limite.total = aux_limite.total + cantidad
+                aux_limite.save()
+        # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria sea null
+        limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria__isnull=True))
+        if len(limites)>0:
+            for elemento in limites:
+                clave= elemento.id
+                aux_limite=limite.objects.get(id=clave)
+                aux_limite.total = aux_limite.total + cantidad
+                aux_limite.save()
+
+        aux_cuota.save()
+        aux_cuenta.save()
+        aux_usuario.save()
+        #se suma al contador de transacciones de las categorias
+        aux_categoria=categoria.objects.get(id=clave_categoria)
+        aux_categoria.total_transacciones=aux_categoria.total_transacciones + 1
+        aux_categoria.total_dinero= aux_categoria.total_dinero + float(cantidad)
+        aux_categoria.save()
+        if (clave_subcategoria):
+            aux_subcategoria=subcategoria.objects.get(id=clave_subcategoria)
+            aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
+            aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + float(cantidad)
+            aux_subcategoria.save()
+        return JsonResponse(datos)
+
+
+def render_to_pdf(template_path, context_dict):
+    template = get_template(template_path)
+    html = template.render(context_dict)
+
+    # Crear un objeto HttpResponse con el tipo de contenido adecuado para PDF
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="prueba_grafica.pdf"'
+
+    pisa_status = pisa.CreatePDF(html, dest=response)
+
+    if pisa_status.err:
+        return HttpResponse('Error al generar el PDF: {}'.format(pisa_status.err), content_type='text/plain')
+    return response
+
+
+   

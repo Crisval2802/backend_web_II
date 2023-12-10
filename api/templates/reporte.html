@@ -8,10 +8,13 @@
 
     <p style="text-align: center; font-size: 32px; width: 100%; background-color: #020246; color:white; padding:10px"><strong>Administrador de ingresos y gastos</strong></p>
     <h1 style="text-align: center; font-size: 28px"> <strong>Reporte de transacciones</strong> </h1>
-    <h1 style="font-size: 14px;"> <strong>{{datos.usuario}}</strong>  </h1>
-    <h2 style ="text-align: right;"> Fecha del reporte: {{datos.fecha}}</h2>
+    <h1 style="font-size: 14px;"> <strong>{{usuario}}</strong>  </h1>
+    <h2 style ="text-align: right;"> Fecha del reporte: {{fecha}}</h2>
     <hr />
     <p>&nbsp;</p>
+    <img src="data:image/png;base64,{{ chart_image }}" alt="Gráfico" >
+    <p>&nbsp;</p>
+    <h1>Tabla</h1>
     <table style="  width: 100%;
                     border-collapse: collapse; padding: 5px"
                     border="1">
@@ -27,7 +30,7 @@
                 <td style="width: 8.34112%;"><strong>Fecha</strong></td>
             </tr>
 
-            {% for item in datos.Transacciones %}
+            {% for item in transacciones %}
 
 
             <tr  style="background-color: #CCEAF4;">
@@ -42,5 +45,10 @@
             </tr>
 
             {% endfor %}
+
+
+            
         </tbody>
     </table>
+
+

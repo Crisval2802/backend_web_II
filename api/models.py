@@ -81,4 +81,5 @@ class cuotas(models.Model):
     clave_transaccion = models.ForeignKey(transaccion, null=False, blank=False, on_delete=models.DO_NOTHING)
     cantidad=models.FloatField()
     fecha=models.DateField()
+    pendiente=models.CharField(max_length=2, default='SI')
 

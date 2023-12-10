@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF con Gráfico</title>
+</head>
+<body>
+    <h1>{{ example_data }}</h1>
+    <img src="data:image/png;base64,{{ chart_image }}" alt="Gráfico" >
+
+
+        <!-- Acceder a la lista JSON en la plantilla -->
+        <p>Lista adicional:</p>
+        <pre>{{ datos|safe }}</pre>
+</body>
+</html>
