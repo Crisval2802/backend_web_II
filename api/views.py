@@ -414,12 +414,25 @@ class TransaccionesView(APIView):
 
     def post (self,request):
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-        clave_categoria=''
-        clave_subcategoria=''
+
         if request.POST.get('cantidad_pagos'):
             a_cuotas="SI"
         else:
             a_cuotas="NO"
+
+
+        #Valida que la cuenta tenga suficiente dinero para realizar la transaccion
+        aux_validar_cuenta= cuenta.objects.get(id= request.POST.get('cuenta'))
+        if (request.POST.get('tipo')=="Gasto") and (float(request.POST.get('cantidad'))>aux_validar_cuenta.balance) and (a_cuotas=="NO"):
+            datos={'message': "*Error* La cuenta no tiene el suficiente dinero para hacer la transaccion", 'error':'error'}
+            return JsonResponse(datos)
+
+
+
+        # Se realzia el registro de la transaccion
+        clave_categoria=''
+        clave_subcategoria=''
+
         if (request.POST.get('tipo')=="Gasto"):
             transaccion.objects.create(clave_cuenta_id=request.POST.get('cuenta'),
                                     clave_categoria_id=request.POST.get('categoria_gasto'),
@@ -587,6 +600,20 @@ class TransferenciasView(APIView):
 
     def post (self,request):
         jd=json.loads(request.body)
+
+        aux_cuenta = cuenta.objects.get(id=jd["clave_cuenta"])
+
+        if(jd["clave_cuenta"]==jd["clave_cuenta2"]):
+            datos={'message': "*Error* No puedes realizar una transferencia de una cuenta a si misma", 'error':'error'}
+            return JsonResponse(datos)
+
+        if (float(jd["cantidad"]) >aux_cuenta.balance):
+            datos={'message': "*Error* La cuenta no tiene el suficiente dinero para hacer la transferencia", 'error':'error'}
+            return JsonResponse(datos)
+
+            
+
+
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
         transferencia.objects.create(clave_cuenta_id=jd["clave_cuenta"],
                                    tipo="cargo",
@@ -2254,11 +2281,10 @@ class ReporteRango(APIView):
                     
                     
                     # Crear el gráfico con matplotlib
-                    fig, ax = plt.subplots(figsize=(14, 6))
-                    ax.barh(labels, valores)
+                    fig, ax = plt.subplots(figsize=(8, 8))
+                    ax.pie(valores, labels=labels, autopct='%1.1f%%', startangle=90, pctdistance=0.85)
                     plt.title('Representacion grafica')
-                    plt.xlabel('Dinero')
-                    plt.ylabel('Cuentas')
+
                     plt.xticks(rotation=45)
 
                     # Convertir el gráfico a una imagen en formato base64
@@ -2389,11 +2415,10 @@ class ReporteDia(APIView):
                     
                     
                     # Crear el gráfico con matplotlib
-                    fig, ax = plt.subplots(figsize=(14, 6))
-                    ax.barh(labels, valores)
+                    fig, ax = plt.subplots(figsize=(8, 8))
+                    ax.pie(valores, labels=labels, autopct='%1.1f%%', startangle=90, pctdistance=0.85)
                     plt.title('Representacion grafica')
-                    plt.xlabel('Dinero')
-                    plt.ylabel('Cuentas')
+
                     plt.xticks(rotation=45)
 
                     # Convertir el gráfico a una imagen en formato base64
@@ -2533,11 +2558,10 @@ class ReporteMes(APIView):
                         
                         
                         # Crear el gráfico con matplotlib
-                        fig, ax = plt.subplots(figsize=(14, 6))
-                        ax.barh(labels, valores)
+                        fig, ax = plt.subplots(figsize=(8, 8))
+                        ax.pie(valores, labels=labels, autopct='%1.1f%%', startangle=90, pctdistance=0.85)
                         plt.title('Representacion grafica')
-                        plt.xlabel('Dinero')
-                        plt.ylabel('Cuentas')
+
                         plt.xticks(rotation=45)
 
                         # Convertir el gráfico a una imagen en formato base64
@@ -2680,11 +2704,10 @@ class ReporteYear(APIView):
                         
                         
                         # Crear el gráfico con matplotlib
-                        fig, ax = plt.subplots(figsize=(14, 6))
-                        ax.barh(labels, valores)
+                        fig, ax = plt.subplots(figsize=(8, 8))
+                        ax.pie(valores, labels=labels, autopct='%1.1f%%', startangle=90, pctdistance=0.85)
                         plt.title('Representacion grafica')
-                        plt.xlabel('Dinero')
-                        plt.ylabel('Cuentas')
+
                         plt.xticks(rotation=45)
 
                         # Convertir el gráfico a una imagen en formato base64
@@ -3788,11 +3811,11 @@ class ReporteSemana(APIView):
                     
                     
                     # Crear el gráfico con matplotlib
-                    fig, ax = plt.subplots(figsize=(14, 6))
-                    ax.barh(labels, valores)
+
+                    fig, ax = plt.subplots(figsize=(8, 8))
+                    ax.pie(valores, labels=labels, autopct='%1.1f%%', startangle=90, pctdistance=0.85)
                     plt.title('Representacion grafica')
-                    plt.xlabel('Dinero')
-                    plt.ylabel('Cuentas')
+
                     plt.xticks(rotation=45)
 
                     # Convertir el gráfico a una imagen en formato base64
@@ -4315,31 +4338,35 @@ class PagarCuota(APIView):
         
     def put (self,request):
         parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
-
-
-        
         jd=json.loads(request.body)
-
         aux_cuota = cuotas.objects.get(id=jd['clave'])
-        aux_cuota.pendiente='NO'
+
         
 
-        cantidad=aux_cuota.cantidad
+
 
         aux_transaccion = transaccion.objects.get(id=aux_cuota.clave_transaccion_id)
 
         clave_categoria = aux_transaccion.clave_categoria_id
         clave_subcategoria = aux_transaccion.clave_subcategoria_id
 
-        datos={'message': "Exito"}
+ 
         #Cambio de balances
         aux_cuenta=cuenta.objects.get(id=aux_transaccion.clave_cuenta_id)
+
+
 
         clave_usuario=aux_cuenta.clave_usuario_id
         
         aux_usuario=usuario.objects.get(id=int(clave_usuario))
         
+        cantidad=aux_cuota.cantidad
         balance=float(aux_cuenta.balance)
+
+
+        if (cantidad >balance):
+            datos={'message': "*Error* La cuenta no tiene el suficiente dinero para pagar la cuota", 'error':'error'}
+            return JsonResponse(datos)
 
 
 
@@ -4348,7 +4375,8 @@ class PagarCuota(APIView):
         balance = float(aux_usuario.balance)
         balance = balance - float(cantidad)
         aux_usuario.balance = balance
-        parsed_date = datetime.strftime(date.today(), "%Y-%m-%d")
+
+        aux_cuota.pendiente='NO'
 
         # se buscan los limites con fecha menor limite mayor o igual a la actual y la categoria de la transaccion
         limites=list(limite.objects.filter(clave_usuario=clave_usuario).filter(fecha_limite__gte=parsed_date).filter(clave_categoria=clave_categoria))
@@ -4380,6 +4408,8 @@ class PagarCuota(APIView):
             aux_subcategoria.total_transacciones=aux_subcategoria.total_transacciones + 1
             aux_subcategoria.total_dinero= aux_subcategoria.total_dinero + float(cantidad)
             aux_subcategoria.save()
+
+        datos={'message': "Exito"}
         return JsonResponse(datos)
 
 
